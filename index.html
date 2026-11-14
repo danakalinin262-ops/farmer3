@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="Farm - grow veggies, upgrade your plots and seeds, shoo away caterpillars!">
+<meta name="theme-color" content="#3f95d8">
+<title>Farm</title>
+
+<!-- Official Telegram Mini Apps SDK (must be loaded before the game script) -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<!-- 16-bit pixel font -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --ink: #1b1228;
+    --panel: #f6e7bd; --panel-hi: #fffbea; --panel-lo: #d8bd7e;
+    --txt: #2b1d3a; --muted: #6d5a45;
+    --safe-t: calc(env(safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    --safe-b: calc(env(safe-area-inset-bottom, 0px) + var(--tg-safe-area-inset-bottom, 0px));
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; min-height: 100vh;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 9px; line-height: 1.7; color: var(--txt);
+    background: #46b043;
+    display: flex; justify-content: center;
+    padding: calc(var(--safe-t) + 10px) calc(env(safe-area-inset-right, 0px) + 14px) calc(var(--safe-b) + 28px) calc(env(safe-area-inset-left, 0px) + 14px);
+    overflow-x: hidden; position: relative;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    -webkit-font-smoothing: none; text-rendering: optimizeSpeed;
+  }
+  svg, img, canvas { image-rendering: pixelated; shape-rendering: crispEdges; }
+  button { font-family: inherit; }
+  .ic { display: inline-block; vertical-align: middle; flex-shrink: 0; line-height: 0; }
+  .ic svg { display: block; width: 100%; height: 100%; }
+
+  /* ---------- Splash ---------- */
+  #splash { position: fixed; inset: 0; z-index: 300; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: linear-gradient(#3f95d8 0 25%, #58aae3 25% 45%, #72bbec 45% 60%, #46b043 60%); transition: opacity .5s steps(5); }
+  #splash.hidden { opacity: 0; pointer-events: none; }
+  #splash .logo { width: 96px; height: 96px; animation: bob 1s steps(2, end) infinite; }
+  #splash .title { margin-top: 18px; font-size: 26px; color: #fff4d6; letter-spacing: 2px;
+    text-shadow: 3px 0 0 var(--ink), -3px 0 0 var(--ink), 0 3px 0 var(--ink), 0 -3px 0 var(--ink), 3px 3px 0 var(--ink), -3px -3px 0 var(--ink), 3px -3px 0 var(--ink), -3px 3px 0 var(--ink); }
+  #splash .loading { margin-top: 22px; font-size: 10px; color: #fff; text-shadow: 2px 2px 0 var(--ink); }
+  #splash .loading i { font-style: normal; animation: blink 1s steps(1, end) infinite; }
+  #splash .loading i:nth-child(2) { animation-delay: .25s; } #splash .loading i:nth-child(3) { animation-delay: .5s; }
+  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+  /* ---------- Background ---------- */
+  #bg { position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      linear-gradient(#3f95d8 0 10%, #4aa3df 10% 20%, #58aae3 20% 28%, #72bbec 28% 35%, #8fcdf2 35% 40%, transparent 40%),
+      repeating-linear-gradient(90deg, #46b043 0 32px, #43ab40 32px 64px); }
+  #horizon { position: fixed; left: 0; right: 0; top: calc(40% - 8px); height: 32px; z-index: 0; pointer-events: none;
+    background: var(--grass) repeat-x 0 0 / 64px 32px; }
+  #sun { position: fixed; top: calc(var(--safe-t) + 22px); right: 24px; width: 64px; height: 64px; z-index: 0; pointer-events: none; animation: bob 2s steps(2, end) infinite; }
+  .cloud { position: fixed; z-index: 0; pointer-events: none; animation: drift linear infinite; }
+  @keyframes drift { from { transform: translateX(-160px); } to { transform: translateX(110vw); } }
+  .butterfly { position: fixed; z-index: 0; width: 32px; height: 32px; pointer-events: none; animation: flutter 9s steps(36, end) infinite; }
+  .butterfly .ic { animation: flap .3s steps(1, end) infinite; transform-origin: 50% 50%; }
+  @keyframes flap { 0% { transform: scaleX(1); } 50% { transform: scaleX(.6); } }
+  @keyframes flutter {
+    0% { transform: translate(0, 0); } 25% { transform: translate(32px, -20px); } 50% { transform: translate(64px, 4px); }
+    75% { transform: translate(32px, -16px); } 100% { transform: translate(0, 0); } }
+  .flower { position: fixed; bottom: 6px; width: 32px; height: 32px; z-index: 0; pointer-events: none; opacity: .95; }
+
+  #scenery { position: fixed; left: 0; right: 0; bottom: calc(60% - 14px); height: 0; z-index: 0; pointer-events: none; }
+  #scenery .it { position: absolute; bottom: 0; }
+  #scenery .it .ic { width: 100%; height: 100%; }
+  #scenery .blades { position: absolute; left: 0; top: -14%; width: 100%; height: 100%; animation: spin 4s steps(8, end) infinite; }
+  #fenceRow { position: fixed; left: 0; right: 0; top: calc(40% + 6px); height: 32px; z-index: 0; pointer-events: none;
+    background: var(--fence) repeat-x 0 0 / 32px 32px; }
+  #game { width: 100%; max-width: 480px; position: relative; z-index: 1; }
+
+  /* ---------- Pixel panels & buttons ---------- */
+  .pbox { position: relative; margin: 8px 4px 14px; background: var(--panel);
+    box-shadow: 0 -4px 0 0 var(--ink), 0 4px 0 0 var(--ink), -4px 0 0 0 var(--ink), 4px 0 0 0 var(--ink),
+      inset 4px 4px 0 0 var(--panel-hi), inset -4px -4px 0 0 var(--panel-lo), 0 10px 0 0 rgba(27, 18, 40, .28); }
+  .pbox.panel { padding: 14px 14px 12px; }
+  .pbox.wood { --panel: #a9773f; --panel-hi: #c99356; --panel-lo: #7c5321; }
+  .pbox.dark { --panel: #3a2c52; --panel-hi: #54437a; --panel-lo: #251a38; color: #fff4d6; }
+
+  h1 { margin: 6px 0 10px; text-align: center; font-size: 22px; font-weight: normal; color: #fff4d6; letter-spacing: 2px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    text-shadow: 3px 0 0 var(--ink), -3px 0 0 var(--ink), 0 3px 0 var(--ink), 0 -3px 0 var(--ink), 3px 3px 0 var(--ink), -3px -3px 0 var(--ink), 3px -3px 0 var(--ink), -3px 3px 0 var(--ink), 5px 6px 0 rgba(27, 18, 40, .35); }
+  h2 { margin: 0 0 8px; font-size: 10px; font-weight: normal; color: #2e6b1e; display: flex; align-items: center; gap: 8px; line-height: 1.4; }
+
+  .btn { --btn: #4caf3a; --btn-hi: #8de06a; --btn-lo: #2f7d26;
+    position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    margin: 3px; padding: 8px 9px; min-height: 28px; border: 0; cursor: pointer; font-size: 8px; line-height: 1.2;
+    color: #fff; background: var(--btn); text-shadow: 1px 1px 0 rgba(0, 0, 0, .45); touch-action: manipulation; white-space: nowrap;
+    box-shadow: 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink), -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink),
+      inset 3px 3px 0 0 var(--btn-hi), inset -3px -3px 0 0 var(--btn-lo); }
+  .btn:active:not(:disabled) { transform: translateY(3px);
+    box-shadow: 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink), -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink),
+      inset 3px 3px 0 0 var(--btn-lo), inset -3px -3px 0 0 var(--btn-hi); }
+  .btn.gold { --btn: #ffb62e; --btn-hi: #ffe27a; --btn-lo: #b8741a; color: #4a2f00; text-shadow: none; }
+  .btn.star { --btn: #7a5ae0; --btn-hi: #a98cff; --btn-lo: #4a32a8; }
+  .btn.neutral { --btn: #e9d9a8; --btn-hi: #fff7d6; --btn-lo: #b79f64; color: #5a4a2a; text-shadow: none; }
+  .btn.equipped { --btn: #2f7d26; --btn-hi: #4caf3a; --btn-lo: #1d5217; }
+  .btn:disabled { --btn: #b9b3a3; --btn-hi: #d8d3c4; --btn-lo: #8d877a; color: #6f695c; text-shadow: none; cursor: not-allowed; }
+  .btn.square { width: 34px; height: 34px; padding: 0; min-height: 0; }
+  .btn.square .ic { width: 20px; height: 20px; }
+
+  /* ---------- HUD ---------- */
+  #topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; }
+  #coinWrap { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #8a5a00; white-space: nowrap; }
+  #level { flex: 1; text-align: center; font-size: 8px; color: #2e6b1e; }
+  #xpbar-wrap { padding: 10px 12px 8px; }
+  #xpbar-bg { height: 14px; background: var(--ink); padding: 3px; }
+  #xpbar-fill { height: 100%; width: 0%; transition: width .3s steps(8, end);
+    background: repeating-linear-gradient(90deg, #8de06a 0 6px, #46b043 6px 8px); }
+  #xpbar-max { text-align: center; font-size: 8px; color: #8a5a00; margin-top: 6px; }
+
+  #tabNav { display: flex; gap: 6px; margin: 4px 4px 14px; }
+  .tab { flex: 1; margin: 3px; padding: 9px 4px; font-size: 8px; gap: 6px; }
+  .tab:not(.active) { --btn: #e9d9a8; --btn-hi: #fff7d6; --btn-lo: #b79f64; color: #5a4a2a; text-shadow: none; }
+  .tab .ic { width: 16px; height: 16px; }
+
+  #toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+  #toolIcon { width: 28px; height: 28px; }
+  #toolbar .tool-text { font-size: 8px; color: #4b3b5a; }
+  #toolbar .tool-text b { display: block; font-weight: normal; color: #2e6b1e; font-size: 9px; margin-top: 3px; }
+
+  #pageNav { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 6px 0 12px; }
+  #pageLabel { min-width: 110px; text-align: center; font-size: 9px; color: #fff4d6; text-shadow: 2px 2px 0 var(--ink); }
+
+  /* ---------- Field ---------- */
+  #field { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 14px; margin-bottom: 18px; min-height: 200px; }
+  .plot { position: relative; aspect-ratio: 1; margin: 3px; cursor: pointer; user-select: none;
+    box-shadow: 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink), -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink); }
+  .plot:active { transform: translateY(2px); }
+  .plot .soil { position: absolute; inset: 0; }
+  .plot .soil svg { width: 100%; height: 100%; display: block; }
+  .plot .pc { position: relative; z-index: 1; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+  .plot .hint { width: 46%; height: 46%; opacity: .6; }
+  .plot .crop { width: 72%; height: 72%; margin-bottom: 8%; }
+  .plot.ready .crop { animation: hop .8s steps(2, end) infinite; }
+  .plot.ready .soil { filter: brightness(1.18) saturate(1.1); }
+  .plot .spk { position: absolute; z-index: 3; width: 16px; height: 16px; animation: blink 1s steps(1, end) infinite; }
+  .plot .spk.a { left: 8%; top: 10%; } .plot .spk.b { right: 10%; top: 28%; animation-delay: .5s; }
+  @keyframes hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+  .plot .bar-bg { position: absolute; left: 10%; right: 10%; bottom: 7%; height: 10px; background: var(--ink); padding: 2px; z-index: 2; }
+  .plot .bar-fill { height: 100%; width: 0%; background: repeating-linear-gradient(90deg, #ffd93d 0 4px, #c9971c 4px 6px); }
+  .plot.pest { animation: shake .35s steps(2, end) infinite; }
+  .plot .pest-badge { position: absolute; z-index: 3; right: 3%; top: 16%; width: 38%; height: 38%; animation: crawl .6s steps(2, end) infinite alternate; }
+  .plot .pest-timer { position: absolute; z-index: 4; left: 6%; right: 6%; top: 5%; height: 9px; background: var(--ink); padding: 2px; }
+  .plot .pest-fill { height: 100%; width: 100%; background: #e8483f; animation: pestShrink linear forwards; animation-timing-function: steps(15, end); }
+  @keyframes pestShrink { from { width: 100%; } to { width: 0%; } }
+  @keyframes crawl { from { transform: translateX(0); } to { transform: translateX(-4px); } }
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+  .plot .lockbox { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    color: #fff; font-size: 8px; text-shadow: 1px 1px 0 var(--ink), -1px 1px 0 var(--ink), 1px -1px 0 var(--ink), -1px -1px 0 var(--ink); }
+  .plot .lockcost { display: flex; align-items: center; gap: 4px; }
+
+  .pop { position: fixed; z-index: 250; pointer-events: none; font-size: 11px; color: #ffd93d; white-space: nowrap;
+    text-shadow: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink); animation: popUp .8s steps(8, end) forwards; }
+  @keyframes popUp { from { transform: translate(-50%, 0); opacity: 1; } to { transform: translate(-50%, -44px); opacity: 0; } }
+
+  /* ---------- Lists ---------- */
+  #quest-timer { font-size: 8px; color: var(--muted); margin: 0 0 8px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 2px; border-bottom: 3px dotted rgba(27, 18, 40, .18); }
+  .row:last-child { border-bottom: 0; }
+  .row .left { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
+  .row .nm { font-size: 8px; line-height: 1.7; }
+  .row .nm small { display: block; font-size: 7px; color: var(--muted); margin-top: 3px; line-height: 1.7; }
+  .lvl-badge { color: #2e6b1e; font-size: 7px; display: block; margin-top: 3px; }
+  .quest-row.done { opacity: .55; }
+  .quest-row.done .qt { text-decoration: line-through; }
+  .quest-reward { display: flex; align-items: center; gap: 4px; color: #8a5a00; font-size: 8px; white-space: nowrap; }
+  .group-h { font-size: 8px; color: #6d3fbf; margin: 14px 0 2px; display: flex; align-items: center; gap: 7px; }
+  .group-h:first-child { margin-top: 0; }
+
+  .tool-row { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tool-btn { flex: 1; flex-direction: column; margin: 3px; padding: 10px 2px 8px; white-space: normal; text-align: center; gap: 6px;
+    --btn: #e9d9a8; --btn-hi: #fff7d6; --btn-lo: #b79f64; color: #5a4a2a; text-shadow: none; }
+  .tool-btn .big { width: 32px; height: 32px; display: block; }
+  .tool-btn.active { --btn: #bfe89a; --btn-hi: #eaffd0; --btn-lo: #5ea23c; color: #1d5217; }
+
+  .note { font-size: 8px; color: var(--muted); margin: 0 0 10px; line-height: 1.8; }
+  .setup { margin: 4px 0 12px; padding: 10px; border: 3px dashed #b0451f; background: #fff0d0; font-size: 7px; line-height: 1.9; color: #7b2d12; }
+  .setup b { font-weight: normal; color: #b0451f; }
+
+  #buildings { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; align-items: flex-end; min-height: 44px; padding: 4px 0 2px; }
+  .bld { position: relative; width: 44px; height: 44px; }
+  .bld .ic { width: 100%; height: 100%; }
+  .bld .blades { position: absolute; left: 0; top: -14%; width: 100%; height: 100%; animation: spin 3s steps(8, end) infinite; }
+  .bld .blades .ic { width: 100%; height: 100%; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #nextBuilding { text-align: center; font-size: 7px; color: var(--muted); margin-top: 10px; line-height: 1.8; }
+
+  /* ---------- Wardrobe ---------- */
+  .avatar-box { padding: 24px 0 10px; overflow: hidden; --panel: #8fcdf2; --panel-hi: #b9e4f8; --panel-lo: #6ab0dc;
+    background: linear-gradient(#8fcdf2 0 62%, #5cb54a 62% 100%); }
+  .avatar-wrap { display: flex; flex-direction: column; align-items: center; }
+  .avatar-wrap svg { display: block; }
+  .avatar-shadow { width: 96px; height: 12px; margin-top: -6px; background: rgba(27, 18, 40, .3);
+    clip-path: polygon(8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%, 0 50%); }
+
+  /* ---------- Toast ---------- */
+  #toast { position: fixed; top: calc(var(--safe-t) + 10px); left: 50%; transform: translateX(-50%); z-index: 280; max-width: 92vw; text-align: center;
+    padding: 10px 14px; font-size: 8px; line-height: 1.8; color: #fff4d6; background: var(--ink); opacity: 0; pointer-events: none; transition: opacity .15s steps(2, end);
+    box-shadow: 0 -3px 0 0 #fff4d6, 0 3px 0 0 #fff4d6, -3px 0 0 0 #fff4d6, 3px 0 0 0 #fff4d6, 0 0 0 6px var(--ink); }
+  #toast.show { opacity: 1; }
+  #toast .ic { margin: 0 2px; }
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <div class="logo" data-ic="wheat"></div>
+  <div class="title">FARM</div>
+  <div class="loading">LOADING<i>.</i><i>.</i><i>.</i></div>
+</div>
+
+<div id="bg"></div>
+<div id="horizon"></div>
+<div id="sun" data-ic="sun"></div>
+<div id="scenery"></div>
+<div id="fenceRow"></div>
+<div id="toast"></div>
+
+<div id="game">
+  <h1><span class="ic" data-ic="carrot" data-size="28"></span>FARM<span class="ic" data-ic="carrot" data-size="28"></span></h1>
+
+  <div id="topbar" class="pbox">
+    <span id="coinWrap"><span class="ic" data-ic="coin" data-size="20"></span><span id="coins">0</span></span>
+    <span id="level">Lv. 1</span>
+    <button id="muteBtn" class="btn neutral square" aria-label="Sound"></button>
+  </div>
+  <div id="xpbar-wrap" class="pbox">
+    <div id="xpbar-bg"><div id="xpbar-fill"></div></div>
+    <div id="xpbar-max"></div>
+  </div>
+
+  <div id="tabNav">
+    <button class="btn tab active" id="tabFarmBtn"><span class="ic" data-ic="carrot"></span>Farm</button>
+    <button class="btn tab" id="tabWardrobeBtn"><span class="ic" data-ic="shirt_i"></span>Wardrobe</button>
+    <button class="btn tab" id="tabShopBtn"><span class="ic" data-ic="star"></span>Shop</button>
+  </div>
+
+  <!-- ================= FARM ================= -->
+  <div id="farmTab">
+    <div id="toolbar" class="pbox">
+      <span id="toolIcon" class="ic"></span>
+      <span class="tool-text">In hand:<b id="toolText">Hoe</b></span>
+    </div>
+
+    <div id="pageNav">
+      <button id="prevPage" class="btn neutral square" aria-label="Previous page">&lt;</button>
+      <span id="pageLabel">Page 1/5</span>
+      <button id="nextPage" class="btn neutral square" aria-label="Next page">&gt;</button>
+    </div>
+
+    <div id="field" class="pbox wood"></div>
+
+    <div id="quests" class="pbox panel">
+      <h2><span class="ic" data-ic="scroll" data-size="20"></span>Quests</h2>
+      <div id="quest-timer"></div>
+      <div id="quest-list"></div>
+    </div>
+
+    <div id="upgrades" class="pbox panel">
+      <h2><span class="ic" data-ic="up" data-size="20"></span>Farm Upgrades</h2>
+      <div id="upg-list"></div>
+    </div>
+
+    <div id="shop" class="pbox panel">
+      <h2><span class="ic" data-ic="hoe" data-size="20"></span>Tools &amp; Seeds</h2>
+      <div class="tool-row">
+        <button class="btn tool-btn" id="toolHoe"><span class="big ic" id="btnHoeIcon"></span>Hoe</button>
+        <button class="btn tool-btn" id="toolWater"><span class="big ic" id="btnWaterIcon"></span>Watering Can</button>
+        <button class="btn tool-btn" id="toolGlove"><span class="big ic" id="btnGloveIcon"></span>Glove</button>
+      </div>
+      <div id="crops"></div>
+    </div>
+
+    <div id="farmstead" class="pbox panel">
+      <h2><span class="ic" data-ic="b_barn" data-size="20"></span>Farmstead</h2>
+      <div id="buildings"></div>
+      <div id="nextBuilding"></div>
+    </div>
+  </div>
+
+  <!-- ================= WARDROBE ================= -->
+  <div id="wardrobeTab" style="display:none;">
+    <div class="avatar-box pbox"><div id="avatar-holder"></div></div>
+    <div id="wardrobeShop" class="pbox panel">
+      <h2><span class="ic" data-ic="shirt_i" data-size="20"></span>Clothing Shop</h2>
+      <div id="ward-list"></div>
+    </div>
+  </div>
+
+  <!-- ================= STARS SHOP ================= -->
+  <div id="shopTab" style="display:none;">
+    <div id="starsShop" class="pbox panel">
+      <h2><span class="ic" data-ic="star" data-size="20"></span>Stars Shop</h2>
+      <p class="note">Pay with Telegram Stars to power up your farm. Thanks for supporting the game!</p>
+      <div id="stars-setup"></div>
+      <div id="stars-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   FARM - Telegram Mini App
+   =====================================================================
+
+   TELEGRAM STARS (XTR) - HOW TO CONNECT PAYMENTS
+   ---------------------------------------------------------------------
+   The game opens an invoice with Telegram.WebApp.openInvoice(url, cb).
+   The invoice link must be created by YOUR BACKEND with the Bot API,
+   because it needs your bot token. Minimal flow:
+
+   1) Backend endpoint, e.g.  POST https://your-server.example.com/api/create-invoice
+        body:    { "productId": "coins_s", "initData": "<Telegram.WebApp.initData>" }
+        - validate initData (HMAC-SHA256 with secret = HMAC_SHA256("WebAppData", BOT_TOKEN)),
+          see https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+        - take the price from YOUR OWN catalog (never trust a price sent by the client!)
+        - call Bot API  createInvoiceLink:
+            { title, description, payload: "<userId>:<productId>:<nonce>",
+              provider_token: "",            // must be empty for Stars
+              currency: "XTR",
+              prices: [{ label: title, amount: <stars> }] }
+        - respond with   { "invoiceUrl": "https://t.me/$AbCdEf..." }
+
+   2) Bot side: answer every  pre_checkout_query  with answerPreCheckoutQuery(ok = true)
+      within 10 seconds, and store the purchase when  message.successful_payment  arrives
+      (that is the only reliable proof of payment; refunds: refundStarPayment).
+
+   3) Put the endpoint URL into STARS_CONFIG.createInvoiceEndpoint below. Done.
+      (Alternative: pre-create links and list them in STARS_CONFIG.invoiceUrls.)
+
+   The prices shown in this file (STAR_PRODUCTS) are for display only - keep them
+   identical to the prices on your server.
+   ===================================================================== */
+const STARS_CONFIG = {
+  // >>> PUT YOUR BACKEND URL HERE (returns {"invoiceUrl": "..."}) <<<
+  createInvoiceEndpoint: '',
+  // Optional: ready-made invoice links per product, e.g. { coins_s: 'https://t.me/$xxxx' }
+  invoiceUrls: {},
+  // TESTING ONLY: grants purchases instantly without payment (use in a normal browser). NEVER ship with true!
+  devFakePurchases: false
+};
+
+/* ================== TELEGRAM INIT ================== */
+const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+function tgAtLeast(v) { try { return !!tg && tg.isVersionAtLeast(v); } catch (e) { return false; } }
+function inTelegram() { return !!(tg && tg.initData); }
+function haptic(kind) {
+  try {
+    if (!tg || !tg.HapticFeedback || !tgAtLeast('6.1')) return;
+    const H = tg.HapticFeedback;
+    if (kind === 'select') H.selectionChanged();
+    else if (kind === 'success' || kind === 'error' || kind === 'warning') H.notificationOccurred(kind);
+    else H.impactOccurred(kind);   // light | medium | heavy | rigid | soft
+  } catch (e) {}
+}
+function initTelegram() {
+  if (!tg) return;
+  try { tg.expand(); } catch (e) {}
+  try { if (tgAtLeast('6.9')) tg.setHeaderColor('#3f95d8'); } catch (e) {}
+  try { if (tgAtLeast('6.1')) tg.setBackgroundColor('#46b043'); } catch (e) {}
+  try { if (tgAtLeast('7.10')) tg.setBottomBarColor('#46b043'); } catch (e) {}
+  try { if (tgAtLeast('7.7')) tg.disableVerticalSwipes(); } catch (e) {}
+}
+initTelegram();
+
+/* ================== PIXEL SPRITES (drawn pixel by pixel) ================== */
+const SPRITE_DATA = {"pal":{"k":"#1b1228","w":"#fff4d6","a":"#d5dbe6","b":"#9aa6bb","c":"#5d6a82","m":"#c98a4b","n":"#8f5a2c","N":"#5a3418","r":"#e8483f","R":"#9c2a33","o":"#f59a2e","O":"#b85c16","y":"#ffd93d","Y":"#c9971c","l":"#9be04f","e":"#46b043","E":"#1f6b35","u":"#7fd3f5","d":"#3a86d6","D":"#1f4e99","s":"#f4c9a0","S":"#c98c64","p":"#d9b26a","P":"#94703a","f":"#ecd7a0","h":"#ff9cc0","H":"#d96a95","v":"#9a63d8","V":"#5e3399","z":"#b78450","Z":"#9a6a3a","j":"#7a4b25","i":"#54331a","W":"#3b2312","T":"#e05353","U":"#a83a3a","Q":"#5a3a1c","q":"#3a2410"},"spr":{"hoe":{"w":16,"h":16,"rows":["................","................","................","..........kk....",".........kaak...","........kbbaak..","........kcbbaak.",".......kmncbbak.","......kmnkkcbk..",".....kmnk..kk...","....kmnk........","...kmnk.........","..kmnk..........",".kmnk...........","kNNk............",".kk............."]},"can":{"w":16,"h":16,"rows":["................","................",".....kkk........","....kbbbk..kkkk.","...kbkkkbkkwaaak","..kkbkkkbkkbcbck",".kaaaaaaaaakddk.",".kbuudddDDkkdduk","kbkwudddDDkkddkk","kbkwudddDDkkddku","kbkuuDDDDDkddkkk","kbkuudddDDkddkuk",".kbuudddDDddk.k.","..kDDDDDDDkk....","...kkkkkkk......","................"]},"can_gold":{"w":16,"h":16,"rows":["................","................",".....kkk........","....kYYYk..kkkk.","...kYkkkYkkwyyyk","..kkYkkkYkkYOYOk",".kyyyyyyyyykyyk.",".kYwwyyyYYkkyywk","kYkwwyyyYYkkyykk","kYkwwyyyYYkkyykw","kYkwwYYYYYkyykkk","kYkwwyyyYYkyykwk",".kYwwyyyYYyyk.k.","..kYYYYYYYkk....","...kkkkkkk......","................"]},"glove":{"w":16,"h":16,"rows":[".......kk.......","......kwYkkk....","....kkkyYkwYk...","...kwYkyYkyYkkk.","...kyYkyYkyYkyYk",".kkkyYkyYkyYkyYk","kwYkyYkyYkyYkyYk","kyYkyYkyYkyYkyYk",".kyyyYyYyYyYyYYk",".kyyYyyyyyyyyyYk","..kYyyyyyyyyyyYk","...kyyyyyyyyyyYk","....kyyyyyyyyYk.","....kdududududk.","....kDDDDDDDDDk.",".....kkkkkkkkk.."]},"scythe":{"w":16,"h":16,"rows":[".....kkaaaakk...","....kaaaaaaaak..","...kaaabaabbbak.","..kaaabkmnkkkbak","..kaabkkmnk..kbk",".kaabkkmnk....kb",".kaakkmnk......k",".kaakkmnk.......",".kbbkmnk........","..kkkmnk........","...kmnk.........","...kmnk.........","..kmnk..........","..kmnk..........",".kmnk...........",".kmnk..........."]},"carrot":{"w":16,"h":16,"rows":["....k..klk..k...","...kekkklkkkek..","....kelklklek...",".....kelllek....",".....kelllek....","....kyEEEEOk....","....kyooooOk....","....kyoOooOk....",".....kyoooOk....",".....kyoOOk.....",".....kyooOk.....","......kyOOk.....","......kyOk......","......kyOk......",".......kOk......","........k......."]},"potato":{"w":16,"h":16,"rows":["................","................","................","................",".....kkkkkk.....","...kkppppppkk...","..kpppfppppppk..",".kpppfppppppppk.",".kppfppppPpppPk.",".kpppppppPppPPk.",".kppPpPppppPPPk.",".kpppppPppPPPPk.","..kpppppPPPPPk..","...kkppPPPPkk...",".....kkkkkk.....","................"]},"tomato":{"w":16,"h":16,"rows":["................","........k.......",".......kEk......",".....k.kEk.k....","....kekeEekek...","...kkreeEeekk...","..krrrrrErrrrk..",".krrrwwrrrrrrrk.",".krrwrrrrrrrrrk.",".krrwrrrrrrrrrk.",".krrrrrrrrrrrRk.",".krrrrrrrrrrRRk.",".krrrrrrrrrRRRk.","..krrrrrrrRRRk..","...kkrrrrRRkk...",".....kkkkkk....."]},"cabbage":{"w":16,"h":16,"rows":["................","................","......kkkk......","....kkEEEEkk....","...keeleeeeEk...","..keewelleeeEk..",".keeeellllleeEk.","kEeellellleleEEk","kEeellleeelleeEk","kEeellllellleeEk","kEeellllelleeEEk",".keeelElelEeeEk.",".kEeEEeeeeeEEEk.","..kEEeeeeeeEEk..","...kEEEEeEEEk...","....kkkkkkkk...."]},"pumpkin":{"w":16,"h":16,"rows":["................","................",".......kk.......","......kNNk.kk...",".....knNNekeek..","...kkonnNoeeek..","..koOooyoooOOk..",".kooOyoyoooOOOk.","koooyooooooOOOOk","koooyooooooOOOOk","koooOooooooOOOOk","koooOooooooOOOOk","koooOooooooOOOOk",".kooOOOOOOOOOOk.","..koOOOOOOOOOk..","...kkOOOOOOkk..."]},"corn":{"w":16,"h":16,"rows":["......kkkk......",".....kyYyYk.....",".....kYyYyk.....","....kYywyYyk....","....kyYwYyYk....","....kYyYyYyk....","...kkyYyYyYkk...","..kleeeeeeeeEk..","..kleeeeeeeEk...","...kleeeeeeEk...","...kleeeeeEk....","....kleeeeEk....","....kleeeEk.....",".....kleeEk.....",".....kleEk......","......kEEk......"]},"sprout":{"w":16,"h":16,"rows":["................","................","................","................","................","................",".......kk.......","......kllk......","...kkkkllkkkkk..","..klllllllllllk.","..klellllllellk.","..klleleElelllk.","...kkkkeEkkkkk..","......keEk......","......keEk......",".......kk......."]},"leafy":{"w":16,"h":16,"rows":["................","................","......kkkk......",".....keleek.....",".....keleek.....",".....keeeek.....","...kkkeeeekkkk..","..keeeeeeeeeeek.",".kelleEEEElleeek",".keeeEeeEeEeeeek","..keeeeeEkeeeek.",".keeeeeeEeeeeeek",".kelleeeEelleeek",".keeeeeeEeeeeeek","..kkkkkeEkkkkkk.",".......kk......."]},"worm":{"w":16,"h":16,"rows":["................","................","................","..........k....k",".........kkk..kk","..........kkkkkk","...........keek.",".....kkkkkkeeeek","..kkkllllleewewe",".klllrllrleekeke","klllllllllleerek","kllllleeleeleelk","klleellllllllllk",".klElkEkkEklllk.","..kkk.k..k.kkk..","................"]},"coin":{"w":16,"h":16,"rows":["................",".....kkkkkk.....","...kkYYYYYYkk...","..kYYyyyyyyYYk..","..kYywwYYyyyYk..",".kYywyyYYyyyyYk.",".kYywyyYYyyyyYk.",".kYywyyYYyyyyYk.",".kYyyyyYYyyyyYk.",".kYyyyyYYyyyyYk.",".kYyyyyYYyyyyYk.","..kYyyyYYyyyYk..","..kYYyyyyyyYYk..","...kkYYYYYYkk...",".....kkkkkk.....","................"]},"lock":{"w":16,"h":16,"rows":["................",".......kk.......",".....kkaakk.....","....kaaaaaak....","....kaakkaak....","...kaak..kaak...","...kaak..kaak...","...kaakkkkaak...","..kyyyyyyyyYYk..","..kywyyyyyyYYk..","..kywyykkyyYYk..","..kyyyykkyyYYk..","..kyyyyykyyYYk..","..kyyyyyyyyYYk..","..kYYYYYYYYYYk..","...kkkkkkkkkk..."]},"star":{"w":16,"h":16,"rows":[".......kk.......","......kyyk......","......kwyk......",".....kywyyk.....",".kkkkkwyyykkkkk.","kywyyyyyyyyyyyyk",".kywyyyyyyyyyyk.","..kywyyyYYYYYk..","...kyyyyYYYYk...","...kwyyyYYYYk...","..kywyyyYYYYYk..","..kyyyykkYYYYk..",".kyyyyk..kYYYYk.",".kyyyk....kYYYk.","..kkk......kkk..","................"]},"shirt_i":{"w":16,"h":16,"rows":["................","....kkk..kkk....","..kkTTTkkTTTkk..",".kTTTTTUUTTTTTk.","kTTTUTTTTTTUTTUk","kTTTUTTTTTTUTTUk","kTTTUTTTTTTUTTUk",".kkkTTTTTTTUkkk.","...kTTTTTTTUk...","...kTTTTTTTUk...","...kTTTTTTTUk...","...kTTTTTTTUk...","...kTTTTTTTUk...","...kTTTTTTTUk...","....kkkkkkkk....","................"]},"boot_i":{"w":16,"h":16,"rows":["................","................","....kkkk........","...kqqqqk.......","...kQQQQk.......","...kQQQQk.......","...kQQQQk.......","...kQQQQk.......","...kQQQQk.......","...kQQQQQk......","...kQQQQQQkk....","...kQQQQQQQQk...","..kQQQQQQQQQQk..","..kqqqqqqqqqqqk.","...kkkkkkkkkkk..","................"]},"scroll":{"w":16,"h":16,"rows":["................","...kkkkkkkkkk...","..kppppppppppk..","..kppppppppppk..","...kwwwwwwwwk...","...kwccccccak...","...kwwwwwwwwk...","...kwccccccak...","...kwwwwwwwwk...","...kwccccccwk...","...kwwwwwwwwk...","...kwccccwwwk...","..kppppppppppk..","..kppppppppppk..","...kkkkkkkkkk...","................"]},"up":{"w":16,"h":16,"rows":[".......kk.......","......keEk......",".....keleEk.....","....keleeeEk....","...keleeeeeEk...","..keleeeeeeeEk..",".keleeeeeeeeeEk.","..kkkkeeeEkkkk..",".....keeeEk.....",".....keeeEk.....",".....keeeEk.....",".....keeeEk.....",".....keeeEk.....","......kkkk......","................","................"]},"wheat":{"w":16,"h":16,"rows":["......kYyk......",".....kyyykk.....",".....kyyyyyk....",".....kyykyyk....",".....kyykyyk....",".....kyyeyyk....",".....kyyeyyk....",".....kyyeyyk....",".....kkkeyyk....","....klkkekkk....",".....klkekklk...","......kleklk....",".......kllk.....",".......klk......",".......kek......",".......kek......"]},"check":{"w":16,"h":16,"rows":["................","..kkkkkkkkkkkk..",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kwwwwwwwwweeak.",".kwwwwwwwweewak.",".kwwwwwwwweewak.",".kwwwwwwweewwak.",".kwweewweewwwak.",".kwwweeeewwwwak.",".kwwweeeewwwwak.",".kwwwweewwwwwak.",".kwwwwwwwwwwwak.",".kaaaaaaaaaaaak.","..kkkkkkkkkkkk..","................"]},"box":{"w":16,"h":16,"rows":["................","..kkkkkkkkkkkk..",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kwwwwwwwwwwwak.",".kaaaaaaaaaaaak.","..kkkkkkkkkkkk..","................"]},"snd_on":{"w":16,"h":16,"rows":["................","................","................",".....k......k...","....kak....kwk..","..kkkaak..kkwk..",".kbbbaaakkwkwk..",".kbbbaaaakwkwk..",".kbbbaaaakwkwk..",".kbbbaaakkwkwk..","..kkkaak..kkwk..","....kak....kwk..",".....k......k...","................","................","................"]},"snd_off":{"w":16,"h":16,"rows":["................","................","................",".....k..........","....kak...k...k.","..kkkaak.krk.krk",".kbbbaaak.krkrk.",".kbbbaaaak.krk..",".kbbbaaaakkrkrk.",".kbbbaaakkrk.krk","..kkkaak..k...k.","....kak.........",".....k..........","................","................","................"]},"pouch":{"w":16,"h":16,"rows":["................","................",".....kkkkkk.....","....knnnnnnk....","....knnnnnnk.....",".....kmmmmk.....","....krrrrrrk....","...kmRrrrrRnk...","..kmmmmmmmmnnk..","..kmmmYYYYmnnk..",".kmmmmYyyYmnnnk.","..kmmmYyyYmnnk..","..kmmmYYYYmnnk..","...knnnnnnnnk...","....knnnnnnk....",".....kkkkkk....."]},"sack":{"w":16,"h":16,"rows":["....k.k.k.k.....","...kPkPkPkPk....","...kpppppppk....","....kppppppk....","....kppppppk....","....kppppppk....","...kprrrrrrPk...","..kppppwyppPPk..",".kpppyyyyypPPPk.",".kppywyYyppPPPk.",".kppyYyypwyPPPk.",".kpppyypyyyyPPk.",".kpppppppYyPPPk.","..kPPPPPPPPPPk..","...kPPPPPPPPk...","....kkPPPPkk...."]},"chest":{"w":16,"h":16,"rows":["................","................","......kkkk......",".....kyywyk.....","...kkywyyyykk...","..kyywYYmYwyyk..","..kmymmmmmmymk..",".kmmymmmmmmymmk.",".kmmymmyymmymmk.",".kNNNNNyyNNNNNk.",".knmymmYkmmymnk.",".knnymmykmmynnk.",".knnynnnnnnynnk.",".kNNyNNNNNNyNNk.",".kNNyNNNNNNyNNk.","..kkkkkkkkkkkk.."]},"hat_straw":{"w":16,"h":16,"rows":["................","................","................","................",".....kkkkkk.....","....kYyyyyYk....","...kYyyyyYyyk...","...kyyyyYyyyk...","...kyyyYyyyyk...",".kkkrrrrrrRRkkk.","kyyyyYyyyyYyyyyk","kyyyYyyyyYyyyyYk",".kYYYYYYYYYYYYk.","..kkkkkkkkkkkk..","................","................"]},"hat_cap":{"w":16,"h":16,"rows":["................","................","................","................","......kk........",".....kDDkkk.....","....kduddddk....","...kdudddddDk...","...kdudddddDk...","...kddddddDDk...","...kddddddDdk...","..kDDDDDDDDDDk..","..kDDDDDDDDDDk..","...kkkkkkkkkk...","................","................"]},"hat_top":{"w":16,"h":16,"rows":["................","................","................",".....kkkkkk.....","....kvvvvvVk....","....kvwvvvVk....","....kvwvvvVk....","....kvvvvvVk....","....kvvvvvVk....","....kyyyryYk....","..kkkvvvvvVkkk..",".kVVVVVVVVVVVVk.",".kVVVVVVVVVVVVk.","..kkkkkkkkkkkk..","................","................"]},"hat_crown":{"w":16,"h":16,"rows":["................","................","................","................","................","................","....k..kk..k....","...krkkwykkrk...","...kyykyykyyk...","...kywwyyyyyk...","...kyryuuyryk...","...kyyyyyyyyk...","...kYYYYYYYYk...","....kkkkkkkk....","................","................"]},"avatar":{"w":16,"h":30,"rows":["................","................","................","................","................","................","....kkkkkkkk....","...knnnnnnnnk...","...knnnnnnnnk...","...knssssssnk...","...kssksskssk...","...kshsssshsk...","...ksssSSsssk...","...kkksssskkk...","..kTTTTTTTTTUk..",".kTTTTTTTTTTTUk.",".kTTTTTTTTTTTUk.",".kTTTTTTTTTTTUk.",".kTTTTTTTTTTTUk.",".kssTTTTTTTUssk.",".kssTTTTTTTUssk.","..kkTTTTTTTUkk..","...kNNNyyNNNk...","...kdddddddDk...","...kdddddddDk...","...kdddDDddDk...","...kdddkkddDk...","..kQQQQkkQQQQk..","..kqqqqkkqqqqk..","...kkkk..kkkk..."]},"tree":{"w":16,"h":16,"rows":["......kkkk......","....kkeeeekk....","...keeeeleeek...","..keelleeleeek..",".keeeeeeeeeeeek.",".keeleleeereeek.",".keeeeeeeeeleEk.",".keeeeeereeeEEEk","keelereeeeeEEEEk","keeeeeeeeeEEEEEk",".kEEEEEEEEEEEEEk","..kEEEEEEEEEEkk.","...kkkknNkkkk...","......knNk......","......knNk......","......knNk......"]},"fence":{"w":16,"h":16,"rows":["................","................","................","...k.......k....","..kmk.....kmk...",".kwmnk...kwmnk..",".kmmnk...kmmnk..","kkmmnkkkkkmmnkkk","mmmmnmmmmmmmnmmm","nnmmnnnnnnmmnnnn","kkmmnkkkkkmmnkkk","kkmmnkkkkkmmnkkk","mmmmnmmmmmmmnmmm","nnmmnnnnnnmmnnnn","kkmmnkkkkkmmnkkk",".kmmnk...kmmnk.."]},"b_shed":{"w":16,"h":16,"rows":["................","................","......kkkk......","....kkiNNikk....","...kNiNNiNNik...","..kNiNNiNNiNNk..",".kNiNNiNNiNNiNk.","kNiNNiNNiNNiNNik",".kknnNnnNnnNnkk.","..knnNnnNnuunk..","..knnniiiidunk..","..knnNiNNinNnk..","..knnNiNNynNnk..","..knnNiNNinNnk..","..knnNiNNinNnk..","...kkkkkkkkkk..."]},"b_mill":{"w":16,"h":16,"rows":["................",".......kk.......","......krRk......",".....krrrRk.....","....krrrrrRk....",".....kwwwak.....",".....kwwwak.....","....kbbbbbck....","....kwwuuwak....","....kwwuuwak....","...kbbbbbbbck...","...kwwwwwwwak...","...kwwwnnwwak...","...kbbbnnbbck...","..kwwwwnnwwwak..","...kkkkkkkkkk..."]},"b_blades":{"w":16,"h":16,"rows":["........kkkk....",".......kNwwwk...",".......kNwawk...",".kkkkkkkNwwwk...","kwawawakNwawk...","kwwwwwwkNwwwk...","kwawawakNwawk...",".kkkkkknnnkkkkkk","kNNNNNNnynNNNNNN",".kkkkkknnnwwwwwk","...kawakNkawawak","...kwwwkNkwwwwwk","...kawakNkkkkkk.","...kwwwkNk......","...kawakNk......","....kkkkNk......"]},"b_green":{"w":16,"h":16,"rows":["................","................",".......kk.......","......kwwkk.....","....kkwwuwwk....","...kwwuuuuuwk...",".kkwuuuuuuuuwkk.","kwwwwwwwwwwwwwwk","kwuauwuuwuuwuuwk","kwauuwuewuuwuuwk","kwueewerweeweuwk","kwelreeeelreeewk","kweeeeleeeeelrwk","kweeeeeeeeeeeewk","kwwwwwwwwwwwwwwk",".kkkkkkkkkkkkkk."]},"b_barn":{"w":16,"h":16,"rows":["................","................",".......kk.......",".....kkwwkk.....","...kkwwrrwwkk...","..kwwrryyrrwwk..",".kwrrrrNNrrrrwk.",".kwrrrrrrrrrrwk.",".kwrrrrrrrrrrwk.",".kwrrwwwwwwrrwk.",".kwrrwwRRwwrrwk.",".kwrrwRwwRwrrwk.",".kwrrwRRwRwrrwk.",".kwrrwRwwRwrrwk.",".kwRRwwRRwwRRwk.","..kkkkkkkkkkkk.."]},"b_cow":{"w":16,"h":16,"rows":["................","................","................","...k.k..........","..kykykkkkkk....",".kcwwkcwwwwwkkk.",".kwwwwwcccwwwwck","kwwwwwwcccwwwwck","khhwwwwwwwwccwck","kHhwwccwwwwccwck",".kkkwwcaaaaacack","...kwwkaaaaakakk","...kwwkwwkwwkwwk","...kwwkwwkwwkwwk","...kcckcckcckcck","....kk.kk.kk.kk."]},"b_pig":{"w":16,"h":16,"rows":["................","................","................","....kk..........","...kHHkkkkkkkkk.","..kkHHHhhhhhhHHk",".khhhhhhhhhhhHk.",".khhhkhhhhhhhhHk","kRHHhhhhhhhhhhhk","kRHHhhhhhhhhhhhk","kHHHhhhhhhhhhhhk",".kkkhHHHHHHHHHk.","....kHHHHHHHHk..","....kHHkHHkHHk..","....kHHkHHkHHk..",".....kk.kk.kk..."]},"b_fountain":{"w":16,"h":16,"rows":["......kuk.......",".......kuk......","......kukk......",".....kukuwk.....","....kukukkwk....","...kukkkukkwk...","...kauuuuuuak...","...kaaauuaaak...","....kkkabkkk....","......kabk......",".....kkabkk.....","..kkkbbabbbkkk..",".kbuuuuabuuuubk.","kbuuuuuuuuuuuubk",".kccccuuuucccck.","..kkkcccccckkk.."]},"b_tractor":{"w":16,"h":16,"rows":[".............k..","............kbk.","...kkkkkk...kck.","..kDDDDDDk..kck.","..kduuuudk..kck.","..kduuuudkkkkck.","..kduuuudooooook","..kddddddrrrrryk","..krrkrrrrrrrryk","..kkkkkkrrrrrrrk",".kkkyyykkRRRRRRk",".kkkyYykkkkkkkkk",".kkkyYykkkkkyykk",".kkkyyykkkkkyykk","..kkkkkkk.kkkkkk","...kkkkk...kkkk."]},"b_trophy":{"w":16,"h":16,"rows":["..kkkkkkkkkkkk..",".kyyyyyyyyYYYYk.","kyywywyyyyYYYYYk","kyyywyyyyyYYYYYk","kykywyyywyYYYkYk","kykyyyywwwYYYkYk","kyykyyyywyYYkYYk",".kkyyyyyyyYYYkk.","...kkyyyyyYkk...",".....kkyykk.....","......kyyk......",".....kyyyyk.....","....kYYYYYYk....","...kYYYYYYYYk...","....kkkkkkkk....","................"]},"sun":{"w":16,"h":16,"rows":["......oyyo......","..o...oyyo...o..",".oyo.oooooo.oyo.","..oyoyyyyyyoyo..","...oywwyyyyyo...","..oywwyyyyyyyo..","oooyyyyyyyyyyooo","yyoyyyyyyyyyyoyy","yyoyyyyyyyyyyoyy","oooyyyyyyyyyoooo","..oyyyyyyyyooo..","...oyyyyyyooo...","..oyoyyyyoooyo..",".oyo.oooooo.oyo.","..o...oyyo...o..","......oyyo......"]},"cloud":{"w":24,"h":10,"rows":["........................","..........wwwwww........","........wwwwwwwwww......",".....wwwwwwwwwwwwww.....","...wwwwwwwwwwwwwwwwwww..","..wwwwwwwwwwwwwwwwwwwww.","..wwwwwwwwwwwwwwwwwwwww.","..wawwawwawwawwawwawwaw.","...aaaaaaaaaaaaaaaaaaa..",".....wwww.........w....."]},"butterfly":{"w":16,"h":16,"rows":["................",".....k....k.....","......k..k......","...hhhh..hhhh...","..hhhhhkkhhhhh..","..hwwhhkkhhwwh..",".hhhhhhkkhhhhhh.","..hhhhhkkhhhhh..","..hhhhhkkhhhhh..","...vvvvkkvvvv...","...vvvvkkvvvv...","...vvvvkkvvvv...","...vvvvkkvvvv...","................","................","................"]},"flower_a":{"w":16,"h":16,"rows":["................","......kkkk......",".....khhhhk.....",".....khhhhk.....","....khhhhhhk....","...khhhyyhhhk...","..khhhyyyyhhhk..","...khhhyyhhhk...","....khhhhhhk....",".....kheEhk.....","....kkheEhk.....","...kllkeEkkkk...","..klllleEklllk..","...kllkeElllllk.","....kkkeEklllk..","......keEkkkk..."]},"flower_b":{"w":16,"h":16,"rows":["................","......kkkk......",".....kwwwwk.....",".....kwwwwk.....","....kwwwwwwk....","...kwwwyywwwk...","..kwwwyyyywwwk..","...kwwwyywwwk...","....kwwwwwwk....",".....kweEwk.....","....kkweEwk.....","...kllkeEkkkk...","..klllleEklllk..","...kllkeElllllk.","....kkkeEklllk..","......keEkkkk..."]},"flower_c":{"w":16,"h":16,"rows":["................","......kkkk......",".....kooook.....",".....kooook.....","....kooooook....","...koooyyoook...","..koooyyyyoook..","...koooyyoook...","....kooooook....",".....koeEok.....","....kkoeEok.....","...kllkeEkkkk...","..klllleEklllk..","...kllkeElllllk.","....kkkeEklllk..","......keEkkkk..."]},"grass":{"w":16,"h":8,"rows":["..l...l..l....l.",".le..le.le..le.l","eeeeeeeeeeeeeeee","eeEeeeeeeeEeeeee","eeeeeeeEeeeeeeEe","EeeeeEeeeeeeEeee","eeeEeeeeeEeeeeEe","EEEEEEEEEEEEEEEE"]},"soil_dry":{"w":16,"h":16,"rows":["zzzzzzzzzzzzzzzz","zzZzzzfzzzzffZzz","zzzzzzzZzZzzzfzz","zzfZfzzzzzzZzzzz","zfzzZZzzzzfzzzzz","zzzzzzZZzfzzzzzz","zzzZzzzzzzzzzzzz","zfzfzzzzzzzzzzzz","zzzzzzzzzzzzzzzz","zzzzzzzzzzzZzzzz","zzzzzZzzzZZzzZzz","zzzzzzzzZzzzzzzz","zfzzZzzzzzzzzzzz","zzfZzzzzzfzzzzzz","zzzzzzzzzzZzzzZz","zzzzZzZzzZzzzzzz"]},"soil_tilled":{"w":16,"h":16,"rows":["NNNNNNNNNNNNNNNN","ijiiiiiiiiiiiiii","njjjjjjjjjjjjnjj","nnnnnjnnnnnnnnnn","NNNNNNNNNNNNNNNN","iiiiiiiiiiiiiiji","jjjjjjjjjjjjjjjj","nnnnnnjnnnnnnnnn","NNNNNNNNNNNNNNnN","iiiiiiiniiiiiiji","jjjjjjjjnjjjjjjj","nnnnnnnnnnnnnnnn","NjNnNNNNNNNNNNNN","iiiiiiiiiiiiiiii","jjjjjjjjjjjjjjjj","nnnnnjnnnnnnnnnn"]},"soil_wet":{"w":16,"h":16,"rows":["WWWWWWWWWiWWWWWW","WWWWWWWWWWWWWWWW","iiidiiiiiiiiiiii","jjjjjjjjjjjjjjjj","WWWWWiWWWWWWWiWW","WWWWWWWWWWWWWWWW","iiiiiiiiiiiduiii","jdjjiijjjjjjjjjj","iWWWWWWWWWWWWWWW","WWWWWWWWiWWWWWWW","iiiiiiduiiiiiiii","jjjjjjjjjjjjjjjj","WWWWWWWWWWWWWWWW","WWWWWWWWWWWWWdWW","iiiiiiiiiiiiiiii","jjjjjjjjjjjjjjjj"]},"stone":{"w":16,"h":16,"rows":["cccccccccccccccc","babbcbabbbbcbbbb","bbbbcbbbbbbcabbb","bbbbcbbbbbbcbbbb","bbbbcbbbbbbcbbbb","cccccccccccccccc","bbcbbbbbcbbbbbcb","bbcabbbbcabbbbcb","bbcbbbbbcbbbbbcb","bbcbbbbbcbbbbbcb","cccccccccccccccc","bbbbbcbbbbbbcbbb","babbbcabbbbbcabb","bbbbbcbbbbbbcbbb","bbbbbcbbbbbbcbbb","cccccccccccccccc"]}}};
+const PAL = SPRITE_DATA.pal, SPR = SPRITE_DATA.spr;
+const _svgCache = new Map();
+const _bboxCache = new Map();
+
+function sprRects(name, over, dx, dy) {
+  const s = SPR[name]; let out = '';
+  for (let y = 0; y < s.h; y++) {
+    const row = s.rows[y]; let x = 0;
+    while (x < s.w) {
+      const ch = row[x];
+      if (ch === '.') { x++; continue; }
+      let x2 = x + 1;
+      while (x2 < s.w && row[x2] === ch) x2++;
+      const col = (over && over[ch]) || PAL[ch];
+      out += `<rect x="${x + dx}" y="${y + dy}" width="${x2 - x}" height="1" fill="${col}"/>`;
+      x = x2;
+    }
+  }
+  return out;
+}
+function sprBBox(name) {
+  if (_bboxCache.has(name)) return _bboxCache.get(name);
+  const s = SPR[name]; let x0 = 99, y0 = 99, x1 = -1, y1 = -1;
+  for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.rows[y][x] !== '.') {
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const b = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  _bboxCache.set(name, b); return b;
+}
+function sprSVG(name, over, trim) {
+  const key = name + '|' + (over ? JSON.stringify(over) : '') + '|' + (trim ? 1 : 0);
+  let v = _svgCache.get(key);
+  if (v) return v;
+  const s = SPR[name]; let vx = 0, vy = 0, vw = s.w, vh = s.h;
+  if (trim) { const b = sprBBox(name); vx = b.x - 1; vy = b.y - 1; vw = b.w + 2; vh = b.h + 2; }
+  v = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vx} ${vy} ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" shape-rendering="crispEdges" aria-hidden="true">${sprRects(name, over, 0, 0)}</svg>`;
+  _svgCache.set(key, v);
+  return v;
+}
+function ic(name, w, h, over, trim) {
+  h = h || w;
+  return `<span class="ic" style="width:${w}px;height:${h}px">${sprSVG(name, over, trim)}</span>`;
+}
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * f), g = Math.round(((n >> 8) & 255) * f), b = Math.round((n & 255) * f);
+  return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+}
+function $(id) { return document.getElementById(id); }
+function fmt(n) { return Number(n).toLocaleString('en-US'); }
+function setHTML(el, html) { if (el._h !== html) { el.innerHTML = html; el._h = html; } }
+
+/* fill static icon slots */
+document.querySelectorAll('[data-ic]').forEach(el => {
+  const sz = el.getAttribute('data-size');
+  el.innerHTML = sprSVG(el.getAttribute('data-ic'));
+  if (sz) { el.style.width = sz + 'px'; el.style.height = sz + 'px'; el.style.display = 'inline-block'; }
+});
+document.querySelectorAll('.tab .ic').forEach(el => { el.style.width = '16px'; el.style.height = '16px'; });
+document.documentElement.style.setProperty('--grass', `url("data:image/svg+xml,${encodeURIComponent(sprSVG('grass'))}")`);
+
+/* ================== DECOR ================== */
+function spawnDecor() {
+  [{ top: '6%', w: 120, dur: 46, delay: 0 }, { top: '14%', w: 90, dur: 60, delay: 8 }, { top: '2%', w: 72, dur: 38, delay: 18 }].forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'cloud'; d.style.top = `calc(${c.top} + var(--safe-t))`; d.style.width = c.w + 'px'; d.style.height = (c.w * 10 / 24) + 'px';
+    d.style.animationDuration = c.dur + 's'; d.style.animationDelay = '-' + c.delay + 's';
+    d.innerHTML = sprSVG('cloud'); document.body.appendChild(d);
+  });
+  /* background scenery standing on the horizon */
+  const sc = $('scenery');
+  const items = [
+    { s: 'tree', l: '1%', w: 64 }, { s: 'b_mill', l: '9%', w: 120, blades: true }, { s: 'tree', l: '30%', w: 56 },
+    { s: 'b_barn', l: '46%', w: 96 }, { s: 'tree', l: '66%', w: 72 }, { s: 'b_green', l: '76%', w: 80 }, { s: 'tree', l: '92%', w: 56 }
+  ];
+  items.forEach(it => {
+    const d = document.createElement('div'); d.className = 'it'; d.style.left = it.l; d.style.width = it.w + 'px'; d.style.height = it.w + 'px';
+    d.innerHTML = `<span class="ic">${sprSVG(it.s)}</span>` + (it.blades ? `<span class="blades"><span class="ic">${sprSVG('b_blades')}</span></span>` : '');
+    sc.appendChild(d);
+  });
+  document.documentElement.style.setProperty('--fence', `url("data:image/svg+xml,${encodeURIComponent(sprSVG('fence'))}")`);
+  const b = document.createElement('div'); b.className = 'butterfly'; b.style.left = '15%'; b.style.top = '55%';
+  b.innerHTML = `<span class="ic" style="width:32px;height:32px">${sprSVG('butterfly')}</span>`; document.body.appendChild(b);
+  ['5%', '30%', '62%', '85%'].forEach((left, i) => {
+    const f = document.createElement('div'); f.className = 'flower'; f.style.left = left;
+    f.innerHTML = sprSVG(['flower_a', 'flower_b', 'flower_c', 'flower_a'][i]); document.body.appendChild(f);
+  });
+}
+spawnDecor();
+
+/* ================== SOUND (synthesised with the Web Audio API) ================== */
+let actx = null;
+let muted = false;
+function ensureAudio() {
+  if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) actx = new AC(); }
+  if (actx && actx.state === 'suspended') actx.resume();
+}
+function beep(freq, dur, type, vol, delay) {
+  if (muted || !actx) return;
+  const o = actx.createOscillator(); const g = actx.createGain();
+  o.type = type || 'sine'; o.frequency.value = freq; g.gain.value = 0;
+  o.connect(g); g.connect(actx.destination);
+  const t = actx.currentTime + (delay || 0);
+  o.start(t); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); o.stop(t + dur + 0.02);
+}
+function sweep(f1, f2, dur, type, vol, delay) {
+  if (muted || !actx) return;
+  const o = actx.createOscillator(); const g = actx.createGain();
+  o.type = type || 'sine'; g.gain.value = 0;
+  o.connect(g); g.connect(actx.destination);
+  const t = actx.currentTime + (delay || 0);
+  o.frequency.setValueAtTime(f1, t);
+  o.frequency.linearRampToValueAtTime(f2, t + dur);
+  o.start(t); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); o.stop(t + dur + 0.02);
+}
+function sfxClick()      { beep(320, 0.05, 'square', 0.06); }
+function sfxTill()       { [0, 0.12, 0.24].forEach(d => beep(140 + Math.random() * 25, 0.09, 'square', 0.13, d)); }
+function sfxWater()      { [900, 760, 640, 540].forEach((f, i) => beep(f, 0.07, 'sine', 0.09, i * 0.06)); }
+function sfxPlant()      { beep(520, 0.08, 'sine', 0.14); beep(700, 0.09, 'sine', 0.1, 0.05); }
+function sfxHarvest()    { beep(880, 0.09, 'square', 0.13); beep(1180, 0.12, 'square', 0.11, 0.07); }
+function sfxBuyPlot()    { beep(420, 0.08, 'sawtooth', 0.1); beep(320, 0.08, 'sawtooth', 0.08, 0.06); }
+function sfxLevelUp()    { [523, 659, 784, 1046].forEach((f, i) => beep(f, 0.18, 'triangle', 0.16, i * 0.11)); }
+function sfxReward()     { [660, 880, 990, 1320].forEach((f, i) => beep(f, 0.12, 'triangle', 0.14, i * 0.09)); }
+function sfxPestAppear() { sweep(520, 160, 0.4, 'sawtooth', 0.09); }
+function sfxShoo()       { sweep(300, 950, 0.15, 'sine', 0.13); beep(1200, 0.05, 'square', 0.08, 0.14); }
+function sfxPestEat()    { for (let i = 0; i < 5; i++) beep(70 + Math.random() * 300, 0.05, 'square', 0.12, i * 0.045); }
+function sfxUpgrade()    { [440, 660, 880].forEach((f, i) => beep(f, 0.1, 'triangle', 0.14, i * 0.08)); }
+function sfxWardrobe()   { beep(500, 0.07, 'sine', 0.1); beep(750, 0.08, 'sine', 0.09, 0.05); }
+
+function renderMute() { $('muteBtn').innerHTML = `<span class="ic">${sprSVG(muted ? 'snd_off' : 'snd_on')}</span>`; }
+$('muteBtn').onclick = () => { muted = !muted; renderMute(); haptic('select'); };
+renderMute();
+
+/* ================== GAME DATA ================== */
+const CROPS = {
+  carrot:  { name: 'Carrot',  cost: 5,  time: 8,   sell: 12,  xp: 2 },
+  potato:  { name: 'Potato',  cost: 12, time: 15,  sell: 30,  xp: 4 },
+  tomato:  { name: 'Tomato',  cost: 20, time: 25,  sell: 55,  xp: 7 },
+  cabbage: { name: 'Cabbage', cost: 35, time: 40,  sell: 100, xp: 12 },
+  pumpkin: { name: 'Pumpkin', cost: 60, time: 70,  sell: 200, xp: 20 },
+  corn:    { name: 'Corn',    cost: 90, time: 100, sell: 320, xp: 30 },
+};
+const CROP_KEYS = Object.keys(CROPS);
+const PLOTS_TOTAL = 30;
+const PAGE_SIZE = 6;
+const TOTAL_PAGES = Math.ceil(PLOTS_TOTAL / PAGE_SIZE);
+const LEVEL_CAP = 30;
+const CROP_UPG_MAX = 5;
+const FERT_MAX = 5;
+const PEST_TIMEOUT_MS = 15000;
+const PEST_CHANCE_PER_TICK = 0.05;
+const QUEST_REFRESH_MS = 30 * 60 * 1000;
+const GOLDEN_CAN_SPEEDUP = 0.8;   // crops grow 20% faster with the Golden Watering Can
+const SAVE_KEY = 'farmer-state';  // same key as the old version, so existing progress is kept
+
+const QUEST_TEXT = {
+  harvest5: 'Harvest 5 crops',
+  plant3:   'Plant 3 seeds',
+  earn100:  'Earn 100 coins',
+  shoo3:    'Shoo away 3 caterpillars',
+};
+
+const BUILDINGS = [
+  { lvl: 1,  spr: 'b_shed',     name: 'Old Shed' },
+  { lvl: 5,  spr: 'b_mill',     name: 'Windmill', blades: true },
+  { lvl: 8,  spr: 'b_green',    name: 'Greenhouse' },
+  { lvl: 12, spr: 'b_barn',     name: 'Barn' },
+  { lvl: 16, spr: 'b_cow',      name: 'Cowshed' },
+  { lvl: 20, spr: 'b_pig',      name: 'Pigsty' },
+  { lvl: 24, spr: 'b_fountain', name: 'Fountain' },
+  { lvl: 28, spr: 'b_tractor',  name: 'Tractor' },
+  { lvl: 30, spr: 'b_trophy',   name: 'Golden Farm' },
+];
+
+/* ---- Wardrobe (ids are unchanged so old saves keep working) ---- */
+const ITEMS = [
+  { id: 'hat_straw',     type: 'hat',   name: 'Straw Hat',     cost: 80,  sprite: 'hat_straw' },
+  { id: 'hat_cap',       type: 'hat',   name: 'Cap',           cost: 60,  sprite: 'hat_cap' },
+  { id: 'hat_tophat',    type: 'hat',   name: 'Party Top Hat', cost: 150, sprite: 'hat_top' },
+  { id: 'shirt_red',     type: 'shirt', name: 'Red Shirt',     cost: 70,  color: '#e05353' },
+  { id: 'shirt_blue',    type: 'shirt', name: 'Blue Shirt',    cost: 70,  color: '#4a90d9' },
+  { id: 'shirt_green',   type: 'shirt', name: 'Green Shirt',   cost: 70,  color: '#4caf50' },
+  { id: 'boots_classic', type: 'boots', name: 'Leather Boots', cost: 40,  color: '#5a3a1c' },
+  { id: 'boots_yellow',  type: 'boots', name: 'Yellow Boots',  cost: 55,  color: '#ffca28' },
+  /* VIP items - bought with Telegram Stars */
+  { id: 'hat_crown',     type: 'hat',   name: 'Royal Crown',   stars: 60, sprite: 'hat_crown', product: 'vip_crown' },
+  { id: 'shirt_gold',    type: 'shirt', name: 'Golden Shirt',  stars: 90, color: '#ffd23f',    product: 'vip_shirt' },
+];
+const ITEM_MAP = Object.fromEntries(ITEMS.map(it => [it.id, it]));
+
+/* ---- Telegram Stars products (prices for display - the server decides the real price) ---- */
+const STAR_PRODUCTS = {
+  coins_s:      { group: 'coins', title: 'Pouch of Coins',      desc: '+500 coins',                         stars: 25,  type: 'coins', amount: 500,   sprite: 'pouch' },
+  coins_m:      { group: 'coins', title: 'Sack of Coins',       desc: '+2,500 coins',                       stars: 100, type: 'coins', amount: 2500,  sprite: 'sack' },
+  coins_l:      { group: 'coins', title: 'Treasure Chest',      desc: '+12,000 coins',                      stars: 400, type: 'coins', amount: 12000, sprite: 'chest' },
+  golden_can:   { group: 'boost', title: 'Golden Watering Can', desc: 'Crops grow 20% faster. Forever!',    stars: 150, type: 'perk',  perk: 'goldenCan',   sprite: 'can_gold' },
+  auto_harvest: { group: 'boost', title: 'Auto-Harvest',        desc: 'Ripe crops are collected for you.',  stars: 250, type: 'perk',  perk: 'autoHarvest', sprite: 'scythe' },
+  vip_crown:    { group: 'vip',   title: 'Royal Crown',         desc: 'VIP hat for your farmer.',           stars: 60,  type: 'wardrobe', itemId: 'hat_crown',  sprite: 'hat_crown', trim: true },
+  vip_shirt:    { group: 'vip',   title: 'Golden Shirt',        desc: 'VIP shirt that really shines.',      stars: 90,  type: 'wardrobe', itemId: 'shirt_gold', sprite: 'shirt_i', over: { T: '#ffd23f', U: '#c9971c' } },
+};
+const STAR_GROUPS = { coins: 'Coins', boost: 'Boosts', vip: 'VIP Outfits' };
+
+function plotCost(i) { if (i < 6) return 0; return Math.round(70 * Math.pow(1.28, i - 6) / 5) * 5; }
+function xpForLevel(l) { return 50 + (l - 1) * 18; }
+function cropSellPrice(key) { const lvl = state.cropLevels[key] || 1; return Math.round(CROPS[key].sell * (1 + 0.18 * (lvl - 1))); }
+function cropGrowTime(key) {
+  const base = CROPS[key].time; const fLvl = state.fertility || 1;
+  let t = Math.max(3, Math.round(base * (1 - Math.min(0.3, 0.06 * (fLvl - 1)))));
+  if (state.perks && state.perks.goldenCan) t = Math.max(3, Math.round(t * GOLDEN_CAN_SPEEDUP));
+  return t;
+}
+function cropUpgradeCost(key) { const lvl = state.cropLevels[key] || 1; if (lvl >= CROP_UPG_MAX) return null; return Math.round(CROPS[key].cost * 3.2 * Math.pow(1.55, lvl - 1)); }
+function fertilityCost() { const lvl = state.fertility || 1; if (lvl >= FERT_MAX) return null; return Math.round(150 * Math.pow(1.9, lvl - 1)); }
+
+function freshPlot() { return { soil: 'dry', crop: null, plantedAt: null, pest: false, pestSince: null }; }
+let state = {
+  coins: 60, xp: 0, level: 1, unlockedPlots: 6, totalHarvested: 0,
+  plots: Array.from({ length: PLOTS_TOTAL }, () => freshPlot()),
+  quests: null,
+  questsRefreshAt: null,
+  cropLevels: Object.fromEntries(CROP_KEYS.map(k => [k, 1])),
+  fertility: 1,
+  wardrobe: { owned: [], equipped: { hat: null, shirt: null, boots: null } },
+  perks: { goldenCan: false, autoHarvest: false },
+  purchases: {},
+  savedAt: 0,
+};
+let selection = { type: 'tool', value: 'hoe' };
+let currentPage = 0;
+let currentTab = 'farm';
+let saveTimer = null;
+let purchaseBusy = false;
+
+function toast(msg) {
+  const t = $('toast');
+  t.innerHTML = msg; t.classList.add('show');
+  clearTimeout(toast._h);
+  toast._h = setTimeout(() => t.classList.remove('show'), 1700);
+}
+function pop(ev, text) {
+  if (!ev || ev.clientX === undefined) return;
+  const d = document.createElement('div');
+  d.className = 'pop'; d.textContent = text; d.style.left = ev.clientX + 'px'; d.style.top = (ev.clientY - 10) + 'px';
+  document.body.appendChild(d); setTimeout(() => d.remove(), 850);
+}
+const COIN = () => ic('coin', 12);
+
+/* ---- Quests ---- */
+function newQuestSet() {
+  return [
+    { id: 'harvest5', target: 5,   progress: 0, reward: 25, done: false },
+    { id: 'plant3',   target: 3,   progress: 0, reward: 20, done: false },
+    { id: 'earn100',  target: 100, progress: 0, reward: 40, done: false },
+    { id: 'shoo3',    target: 3,   progress: 0, reward: 30, done: false },
+  ];
+}
+function questProgress(id, amount) {
+  if (!state.quests) return;
+  const q = state.quests.find(q => q.id === id);
+  if (!q || q.done) return;
+  q.progress = Math.min(q.target, q.progress + amount);
+  if (q.progress >= q.target) { q.done = true; state.coins += q.reward; toast(`Quest complete! +${q.reward} ${COIN()}`); haptic('success'); }
+}
+function checkQuestRefresh() {
+  if (!state.questsRefreshAt || Date.now() >= state.questsRefreshAt) {
+    state.quests = newQuestSet();
+    state.questsRefreshAt = Date.now() + QUEST_REFRESH_MS;
+    saveState();
+  }
+}
+function formatTime(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+}
+
+/* ================== SAVING: localStorage + Telegram CloudStorage ================== */
+function cloudOK() { return !!(tg && tg.CloudStorage && tgAtLeast('6.9') && inTelegram()); }
+function cloudLoad() {
+  return new Promise(res => {
+    if (!cloudOK()) return res(null);
+    try {
+      tg.CloudStorage.getItem('fs_n', (e, n) => {
+        n = parseInt(n, 10);
+        if (e || !n || n < 1 || n > 20) return res(null);
+        const keys = Array.from({ length: n }, (_, i) => 'fs_' + i);
+        tg.CloudStorage.getItems(keys, (e2, vals) => {
+          if (e2 || !vals) return res(null);
+          res(keys.map(k => vals[k] || '').join(''));
+        });
+      });
+    } catch (e) { res(null); }
+  });
+}
+let cloudTimer = null, cloudBusy = false, cloudPending = false;
+function scheduleCloud(immediate) {
+  if (!cloudOK()) return;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(cloudFlush, immediate ? 50 : 6000);
+}
+function cloudFlush() {
+  if (!cloudOK()) return;
+  if (cloudBusy) { cloudPending = true; return; }
+  cloudBusy = true;
+  const data = JSON.stringify(state);
+  const chunks = [];
+  for (let i = 0; i < data.length; i += 3500) chunks.push(data.slice(i, i + 3500));
+  const finish = () => { cloudBusy = false; if (cloudPending) { cloudPending = false; scheduleCloud(false); } };
+  let i = 0;
+  const next = () => {
+    try {
+      if (i < chunks.length) {
+        tg.CloudStorage.setItem('fs_' + i, chunks[i], err => { if (err) return finish(); i++; next(); });
+      } else {
+        tg.CloudStorage.setItem('fs_n', String(chunks.length), () => finish());
+      }
+    } catch (e) { finish(); }
+  };
+  next();
+}
+
+async function loadState() {
+  let localRaw = null;
+  try { localRaw = localStorage.getItem(SAVE_KEY); } catch (e) {}
+  let cloudRaw = null;
+  try { cloudRaw = await Promise.race([cloudLoad(), new Promise(r => setTimeout(() => r(null), 3500))]); } catch (e) {}
+  const cands = [localRaw, cloudRaw].map(r => { try { return r ? JSON.parse(r) : null; } catch (e) { return null; } }).filter(Boolean);
+  cands.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  const parsed = cands[0];
+  if (parsed) {
+    try {
+      state = Object.assign(state, parsed);
+      if (!state.plots || state.plots.length < PLOTS_TOTAL) {
+        const old = state.plots || [];
+        state.plots = old.concat(Array.from({ length: PLOTS_TOTAL - old.length }, () => freshPlot()));
+      }
+      state.plots = state.plots.map(p => {
+        if (!p.soil) p = { soil: p.crop ? 'growing' : 'dry', crop: p.crop || null, plantedAt: p.plantedAt || null };
+        if (p.pest === undefined) p.pest = false;
+        if (p.pestSince === undefined) p.pestSince = null;
+        return p;
+      });
+      if (!state.cropLevels) state.cropLevels = {};
+      CROP_KEYS.forEach(k => { if (!state.cropLevels[k]) state.cropLevels[k] = 1; });
+      if (!state.fertility) state.fertility = 1;
+      if (!state.wardrobe) state.wardrobe = { owned: [], equipped: { hat: null, shirt: null, boots: null } };
+      if (!state.wardrobe.owned) state.wardrobe.owned = [];
+      if (!state.wardrobe.equipped) state.wardrobe.equipped = { hat: null, shirt: null, boots: null };
+      state.perks = Object.assign({ goldenCan: false, autoHarvest: false }, state.perks || {});
+      if (!state.purchases) state.purchases = {};
+      delete state.levelUpsSinceAd;   // old ad counter, no longer used
+    } catch (e) {}
+  }
+  if (!state.quests) state.quests = newQuestSet();
+  if (!state.questsRefreshAt) state.questsRefreshAt = Date.now() + QUEST_REFRESH_MS;
+  render();
+}
+function saveState(flush) {
+  clearTimeout(saveTimer);
+  const run = () => {
+    state.savedAt = Date.now();
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
+    scheduleCloud(!!flush);
+  };
+  if (flush) run(); else saveTimer = setTimeout(run, 400);
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) { saveState(true); } });
+window.addEventListener('pagehide', () => saveState(true));
+
+function isReady(plot) {
+  if (plot.soil !== 'growing' || !plot.crop) return false;
+  return (Date.now() - plot.plantedAt) / 1000 >= cropGrowTime(plot.crop);
+}
+function growPct(plot) { return Math.min(100, ((Date.now() - plot.plantedAt) / 1000 / cropGrowTime(plot.crop)) * 100); }
+
+/* ================== TABS ================== */
+function switchTab(tab) {
+  ensureAudio(); sfxClick(); haptic('select');
+  currentTab = tab;
+  $('farmTab').style.display = tab === 'farm' ? 'block' : 'none';
+  $('wardrobeTab').style.display = tab === 'wardrobe' ? 'block' : 'none';
+  $('shopTab').style.display = tab === 'shop' ? 'block' : 'none';
+  $('tabFarmBtn').classList.toggle('active', tab === 'farm');
+  $('tabWardrobeBtn').classList.toggle('active', tab === 'wardrobe');
+  $('tabShopBtn').classList.toggle('active', tab === 'shop');
+  render();
+}
+$('tabFarmBtn').onclick = () => switchTab('farm');
+$('tabWardrobeBtn').onclick = () => switchTab('wardrobe');
+$('tabShopBtn').onclick = () => switchTab('shop');
+
+/* ================== TOOLS / SEEDS ================== */
+function selectTool(name) { ensureAudio(); sfxClick(); haptic('select'); selection = { type: 'tool', value: name }; render(); }
+function selectCrop(key) { ensureAudio(); sfxClick(); haptic('select'); selection = { type: 'seed', value: key }; render(); }
+$('toolHoe').onclick = () => selectTool('hoe');
+$('toolWater').onclick = () => selectTool('watering');
+$('toolGlove').onclick = () => selectTool('glove');
+function canSprite() { return state.perks && state.perks.goldenCan ? 'can_gold' : 'can'; }
+
+function buyPlot(i) {
+  ensureAudio();
+  const cost = plotCost(i);
+  if (state.coins < cost) { toast('Not enough coins!'); haptic('error'); return; }
+  state.coins -= cost; state.unlockedPlots = i + 1;
+  sfxBuyPlot(); haptic('heavy'); toast('New plot unlocked!'); saveState(); render();
+}
+
+function clickPlot(i, ev) {
+  ensureAudio();
+  const plot = state.plots[i];
+
+  if (plot.soil === 'growing' && plot.pest) {
+    if (selection.type === 'tool' && selection.value === 'glove') {
+      plot.pest = false; plot.pestSince = null;
+      sfxShoo(); haptic('rigid'); toast('Caterpillar shooed away!');
+      questProgress('shoo3', 1);
+      saveState(); render();
+    } else {
+      haptic('warning'); toast('A caterpillar! Grab the glove!');
+    }
+    return;
+  }
+  if (plot.soil === 'growing') {
+    if (isReady(plot)) harvest(i, { ev }); else { haptic('light'); toast('Still growing...'); }
+    return;
+  }
+  if (plot.soil === 'dry') {
+    if (selection.type === 'tool' && selection.value === 'hoe') {
+      plot.soil = 'tilled'; sfxTill(); haptic('light'); saveState(); render();
+    } else { haptic('warning'); toast('Pick the hoe and till the soil first'); }
+    return;
+  }
+  if (plot.soil === 'tilled') {
+    if (selection.type === 'tool' && selection.value === 'watering') {
+      plot.soil = 'watered'; sfxWater(); haptic('light'); saveState(); render();
+    } else { haptic('warning'); toast('Now water the plot with the watering can'); }
+    return;
+  }
+  if (plot.soil === 'watered') {
+    if (selection.type === 'seed') {
+      const def = CROPS[selection.value];
+      if (state.coins < def.cost) { toast('Not enough coins!'); haptic('error'); return; }
+      state.coins -= def.cost;
+      plot.crop = selection.value; plot.plantedAt = Date.now(); plot.soil = 'growing';
+      sfxPlant(); haptic('medium'); questProgress('plant3', 1); saveState(); render();
+    } else { haptic('warning'); toast('Pick some seeds and plant them!'); }
+  }
+}
+
+function harvest(i, opts) {
+  opts = opts || {};
+  const plot = state.plots[i];
+  const sell = cropSellPrice(plot.crop);
+  const def = CROPS[plot.crop];
+  state.coins += sell; state.totalHarvested += 1;
+  sfxHarvest(); haptic(opts.auto ? 'soft' : 'medium');
+  questProgress('harvest5', 1); questProgress('earn100', sell);
+  if (opts.ev) pop(opts.ev, '+' + sell);
+
+  if (state.level < LEVEL_CAP) {
+    state.xp += def.xp;
+    const need = xpForLevel(state.level);
+    if (state.xp >= need) {
+      state.xp -= need; state.level = Math.min(LEVEL_CAP, state.level + 1);
+      toast(state.level >= LEVEL_CAP ? 'Max level reached!' : `Level up! Lv. ${state.level}`);
+      sfxLevelUp(); haptic('success');
+    } else if (!opts.auto) { toast(`+${sell} ${COIN()}`); }
+  } else if (!opts.auto) { toast(`+${sell} ${COIN()}`); }
+
+  plot.crop = null; plot.plantedAt = null; plot.soil = 'dry'; plot.pest = false; plot.pestSince = null;
+  saveState(); render();
+}
+
+/* ---- Caterpillars ---- */
+function pestTick() {
+  let changed = false;
+  state.plots.forEach((plot, i) => {
+    if (i >= state.unlockedPlots) return;
+    if (plot.soil === 'growing' && plot.crop) {
+      if (!plot.pest && !isReady(plot) && Math.random() < PEST_CHANCE_PER_TICK) {
+        plot.pest = true; plot.pestSince = Date.now();
+        sfxPestAppear(); haptic('warning'); changed = true;
+      } else if (plot.pest && Date.now() - plot.pestSince > PEST_TIMEOUT_MS) {
+        plot.crop = null; plot.plantedAt = null; plot.soil = 'dry'; plot.pest = false; plot.pestSince = null;
+        sfxPestEat(); haptic('error'); toast('A caterpillar ate your crop!');
+        changed = true;
+      }
+    }
+  });
+  if (changed) { saveState(); render(); }
+}
+setInterval(pestTick, 2000);
+
+/* ---- Auto-Harvest (Stars perk) ---- */
+function autoHarvestTick() {
+  if (!state.perks || !state.perks.autoHarvest) return;
+  for (let i = 0; i < state.unlockedPlots; i++) {
+    const plot = state.plots[i];
+    if (plot.soil === 'growing' && !plot.pest && isReady(plot)) harvest(i, { auto: true });
+  }
+}
+setInterval(autoHarvestTick, 1000);
+
+/* ---- Upgrades ---- */
+function upgradeCrop(key) {
+  ensureAudio();
+  const cost = cropUpgradeCost(key);
+  if (cost === null) { toast('Already at max level!'); return; }
+  if (state.coins < cost) { toast('Not enough coins!'); haptic('error'); return; }
+  state.coins -= cost; state.cropLevels[key] = (state.cropLevels[key] || 1) + 1;
+  sfxUpgrade(); haptic('success'); toast(`${CROPS[key].name} upgraded to Lv. ${state.cropLevels[key]}!`);
+  saveState(); render();
+}
+function upgradeFertility() {
+  ensureAudio();
+  const cost = fertilityCost();
+  if (cost === null) { toast('Already at max level!'); return; }
+  if (state.coins < cost) { toast('Not enough coins!'); haptic('error'); return; }
+  state.coins -= cost; state.fertility = (state.fertility || 1) + 1;
+  sfxUpgrade(); haptic('success'); toast(`Soil Fertility: Lv. ${state.fertility}!`);
+  saveState(); render();
+}
+
+/* ---- Wardrobe: buy with coins / equip ---- */
+function buyOrEquip(id) {
+  ensureAudio();
+  const item = ITEM_MAP[id];
+  const owned = state.wardrobe.owned.includes(id);
+  if (!owned) {
+    if (item.stars) { buyStarProduct(item.product); return; }   // VIP items cost Stars
+    if (state.coins < item.cost) { toast('Not enough coins!'); haptic('error'); return; }
+    state.coins -= item.cost;
+    state.wardrobe.owned.push(id);
+    state.wardrobe.equipped[item.type] = id;
+    sfxWardrobe(); haptic('success'); toast(`Purchased: ${item.name}!`);
+  } else {
+    const isEquipped = state.wardrobe.equipped[item.type] === id;
+    state.wardrobe.equipped[item.type] = isEquipped ? null : id;
+    sfxWardrobe(); haptic('select');
+  }
+  saveState(); render();
+}
+
+/* ================== TELEGRAM STARS PAYMENTS ================== */
+function paymentsConfigured() {
+  return !!(STARS_CONFIG.createInvoiceEndpoint || (STARS_CONFIG.invoiceUrls && Object.keys(STARS_CONFIG.invoiceUrls).length));
+}
+function isOwned(pid) {
+  const p = STAR_PRODUCTS[pid];
+  if (!p) return false;
+  if (p.type === 'perk') return !!state.perks[p.perk];
+  if (p.type === 'wardrobe') return state.wardrobe.owned.includes(p.itemId);
+  return false;   // coin packs can be bought repeatedly
+}
+async function getInvoiceUrl(pid) {
+  if (STARS_CONFIG.invoiceUrls && STARS_CONFIG.invoiceUrls[pid]) return STARS_CONFIG.invoiceUrls[pid];
+  if (STARS_CONFIG.createInvoiceEndpoint) {
+    const r = await fetch(STARS_CONFIG.createInvoiceEndpoint, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId: pid, initData: tg ? tg.initData : '' })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    return j.invoiceUrl || j.invoice_url || null;
+  }
+  return null;
+}
+function grantProduct(pid) {
+  const p = STAR_PRODUCTS[pid];
+  if (!p) return;
+  if (p.type === 'coins') {
+    state.coins += p.amount;
+  } else if (p.type === 'perk') {
+    state.perks[p.perk] = true;
+  } else if (p.type === 'wardrobe') {
+    if (!state.wardrobe.owned.includes(p.itemId)) state.wardrobe.owned.push(p.itemId);
+    state.wardrobe.equipped[ITEM_MAP[p.itemId].type] = p.itemId;
+  }
+  state.purchases[pid] = (state.purchases[pid] || 0) + 1;
+  saveState(true);
+  sfxReward(); haptic('success');
+  toast(`Thank you! ${p.title} added ${ic('star', 12)}`);
+  render();
+}
+function onInvoiceResult(pid, status) {
+  if (status === 'paid') grantProduct(pid);
+  else if (status === 'cancelled') { toast('Payment cancelled'); haptic('warning'); }
+  else if (status === 'pending') { toast('Payment is processing...'); }
+  else { toast('Payment failed. Please try again'); haptic('error'); }
+  render();
+}
+async function buyStarProduct(pid) {
+  const p = STAR_PRODUCTS[pid];
+  if (!p || purchaseBusy) return;
+  ensureAudio();
+  if (isOwned(pid)) { toast('You already own this!'); return; }
+
+  if (STARS_CONFIG.devFakePurchases) { toast('TEST PURCHASE (no payment)'); grantProduct(pid); return; }
+
+  if (!inTelegram() || typeof tg.openInvoice !== 'function' || !tgAtLeast('6.1')) {
+    toast('Open the game inside Telegram to pay with Stars'); haptic('error'); return;
+  }
+  if (!paymentsConfigured()) { toast('Payments are not connected yet'); haptic('warning'); return; }
+
+  purchaseBusy = true; render();
+  let opened = false;
+  try {
+    const url = await getInvoiceUrl(pid);
+    if (!url) throw new Error('No invoice URL returned');
+    tg.openInvoice(url, status => {          // status: 'paid' | 'cancelled' | 'failed' | 'pending'
+      purchaseBusy = false;
+      onInvoiceResult(pid, status);
+    });
+    opened = true;
+  } catch (e) {
+    console.error('Invoice error:', e);
+    toast('Could not start the payment. Try again later'); haptic('error');
+  } finally {
+    if (!opened) { purchaseBusy = false; render(); }
+  }
+}
+
+/* ================== AVATAR ================== */
+function renderAvatar() {
+  const eq = state.wardrobe.equipped;
+  const sh = ITEM_MAP[eq.shirt], bo = ITEM_MAP[eq.boots], ha = ITEM_MAP[eq.hat];
+  const shirtColor = (sh && sh.color) || '#8d99ae';
+  const bootsColor = (bo && bo.color) || '#6b4423';
+  const over = { T: shirtColor, U: shade(shirtColor, 0.72), Q: bootsColor, q: shade(bootsColor, 0.62) };
+  let inner = sprRects('avatar', over, 0, 0);
+  if (ha) inner += sprRects(ha.sprite, null, 0, -4);
+  return `<div class="avatar-wrap"><svg viewBox="0 -1 16 31" width="128" height="248" shape-rendering="crispEdges">${inner}</svg><div class="avatar-shadow"></div></div>`;
+}
+function itemPreview(item) {
+  if (item.type === 'hat') return ic(item.sprite, 28, 28, null, true);
+  if (item.type === 'shirt') return ic('shirt_i', 28, 28, { T: item.color, U: shade(item.color, 0.72) });
+  return ic('boot_i', 28, 28, { Q: item.color, q: shade(item.color, 0.62) });
+}
+function renderWardrobe() {
+  const eq = state.wardrobe.equipped;
+  const sig = JSON.stringify([state.wardrobe, ITEMS.map(it => (!it.stars && state.coins >= it.cost) ? 1 : 0), purchaseBusy]);
+  if ($('ward-list')._sig === sig) return;
+  $('ward-list')._sig = sig;
+  setHTML($('avatar-holder'), renderAvatar());
+  const groups = { hat: ['hat_top', 'Hats'], shirt: ['shirt_i', 'Shirts'], boots: ['boot_i', 'Boots'] };
+  let html = '';
+  Object.entries(groups).forEach(([type, [icon, label]]) => {
+    html += `<div class="group-h">${ic(icon, 16, 16, null, type === 'hat')}${label}</div>`;
+    ITEMS.filter(it => it.type === type).forEach(item => {
+      const owned = state.wardrobe.owned.includes(item.id);
+      const equipped = eq[item.type] === item.id;
+      let btn;
+      if (!owned) {
+        if (item.stars) btn = `<button class="btn star" data-a="ward" data-k="${item.id}" ${purchaseBusy ? 'disabled' : ''}>${ic('star', 12)}${item.stars}</button>`;
+        else btn = `<button class="btn gold" data-a="ward" data-k="${item.id}" ${state.coins < item.cost ? 'disabled' : ''}>${item.cost}${COIN()}</button>`;
+      } else if (equipped) btn = `<button class="btn equipped" data-a="ward" data-k="${item.id}">Equipped</button>`;
+      else btn = `<button class="btn" data-a="ward" data-k="${item.id}">Equip</button>`;
+      html += `<div class="row"><span class="left">${itemPreview(item)}<span class="nm">${item.name}${item.stars ? '<small>VIP item</small>' : ''}</span></span>${btn}</div>`;
+    });
+  });
+  setHTML($('ward-list'), html);
+}
+
+/* ================== STARS SHOP RENDER ================== */
+function renderShop() {
+  const configured = paymentsConfigured();
+  const sig = JSON.stringify([state.perks, state.wardrobe.owned, purchaseBusy, configured, STARS_CONFIG.devFakePurchases]);
+  if ($('stars-list')._sig === sig) return;
+  $('stars-list')._sig = sig;
+  setHTML($('stars-setup'), (!configured && !STARS_CONFIG.devFakePurchases)
+    ? `<div class="setup"><b>Stars payments are not connected yet.</b><br>Developer: set <b>STARS_CONFIG.createInvoiceEndpoint</b> in the game script (instructions are in the comment at the top of the script).</div>`
+    : '');
+  let html = '';
+  Object.entries(STAR_GROUPS).forEach(([g, label]) => {
+    html += `<div class="group-h">${ic('star', 14)}${label}</div>`;
+    Object.entries(STAR_PRODUCTS).filter(([, p]) => p.group === g).forEach(([pid, p]) => {
+      const owned = isOwned(pid);
+      const btn = owned
+        ? `<button class="btn equipped" disabled>Owned</button>`
+        : `<button class="btn star" data-a="star" data-k="${pid}" ${purchaseBusy ? 'disabled' : ''}>${ic('star', 12)}${p.stars}</button>`;
+      html += `<div class="row"><span class="left">${ic(p.sprite, 36, 36, p.over || null, !!p.trim)}<span class="nm">${p.title}<small>${p.desc}</small></span></span>${btn}</div>`;
+    });
+  });
+  setHTML($('stars-list'), html);
+}
+
+/* ================== FIELD RENDER (only changed plots are rebuilt) ================== */
+function plotSig(i) {
+  const plot = state.plots[i];
+  if (i >= state.unlockedPlots) return 'L' + plotCost(i);
+  if (plot.soil === 'growing') {
+    return ['G', plot.crop, growPct(plot) < 45 ? 0 : 1, plot.pest ? 1 : 0, plot.pest ? plot.pestSince : 0, isReady(plot) ? 1 : 0].join(':');
+  }
+  if (plot.soil === 'tilled') return 'T' + canSprite();
+  return plot.soil;
+}
+function soilLayer(name) { return `<div class="soil">${sprSVG(name)}</div>`; }
+function makePlot(i, sig) {
+  const plot = state.plots[i];
+  const d = document.createElement('div');
+  d.className = 'plot'; d.dataset.i = i; d.dataset.sig = sig;
+  let html = '';
+  if (i >= state.unlockedPlots) {
+    d.classList.add('locked');
+    html = soilLayer('stone') + `<div class="lockbox">${ic('lock', 28)}<div class="lockcost">${plotCost(i)}${COIN()}</div></div>`;
+  } else if (plot.soil === 'dry') {
+    html = soilLayer('soil_dry') + `<div class="pc"><span class="ic hint">${sprSVG('hoe')}</span></div>`;
+  } else if (plot.soil === 'tilled') {
+    html = soilLayer('soil_tilled') + `<div class="pc"><span class="ic hint">${sprSVG(canSprite())}</span></div>`;
+  } else if (plot.soil === 'watered') {
+    html = soilLayer('soil_wet') + `<div class="pc"><span class="ic hint">${sprSVG('sprout')}</span></div>`;
+  } else if (plot.soil === 'growing') {
+    const pct = growPct(plot);
+    const stage = pct < 45 ? 'sprout' : 'leafy';
+    html = soilLayer('soil_wet');
+    if (plot.pest) {
+      d.classList.add('pest');
+      const total = PEST_TIMEOUT_MS / 1000;
+      const el = Math.max(0, (Date.now() - plot.pestSince) / 1000);
+      html += `<div class="pc"><span class="ic crop">${sprSVG(stage)}</span></div>
+        <div class="pest-timer"><div class="pest-fill" style="animation-duration:${total}s;animation-delay:-${el}s"></div></div>
+        <span class="ic pest-badge">${sprSVG('worm')}</span>
+        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>`;
+    } else if (isReady(plot)) {
+      d.classList.add('ready');
+      html += `<div class="pc"><span class="ic crop">${sprSVG(plot.crop)}</span></div>
+        <span class="ic spk a">${sprSVG('star')}</span><span class="ic spk b">${sprSVG('star')}</span>`;
+    } else {
+      html += `<div class="pc"><span class="ic crop">${sprSVG(stage)}</span></div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>`;
+    }
+  }
+  d.innerHTML = html;
+  return d;
+}
+function renderField() {
+  const field = $('field');
+  const start = currentPage * PAGE_SIZE;
+  const end = Math.min(PLOTS_TOTAL, start + PAGE_SIZE);
+  if (field._page !== currentPage || field.children.length !== end - start) {
+    field.innerHTML = ''; field._page = currentPage;
+  }
+  for (let i = start; i < end; i++) {
+    const idx = i - start;
+    const el = field.children[idx];
+    const sig = plotSig(i);
+    if (!el || el.dataset.sig !== sig) {
+      const n = makePlot(i, sig);
+      if (el) field.replaceChild(n, el); else field.appendChild(n);
+    } else {
+      const plot = state.plots[i];
+      if (plot.soil === 'growing' && !isReady(plot)) {
+        const f = el.querySelector('.bar-fill');
+        if (f) f.style.width = growPct(plot) + '%';
+      }
+    }
+  }
+}
+$('field').addEventListener('click', e => {
+  const p = e.target.closest('.plot');
+  if (!p) return;
+  const i = parseInt(p.dataset.i, 10);
+  if (p.classList.contains('locked')) buyPlot(i); else clickPlot(i, e);
+});
+
+/* ================== BUILDINGS ================== */
+function renderBuildings() {
+  const unlocked = BUILDINGS.filter(b => state.level >= b.lvl);
+  const html = unlocked.map(b => `<div class="bld" title="${b.name}">${ic(b.spr, 44)}${b.blades ? `<span class="blades">${ic('b_blades', 44)}</span>` : ''}</div>`).join('');
+  setHTML($('buildings'), html);
+  const next = BUILDINGS.find(b => state.level < b.lvl);
+  $('nextBuilding').textContent = next ? `Next: ${next.name} at Lv. ${next.lvl}` : 'All buildings unlocked!';
+}
+
+/* ================== MAIN RENDER ================== */
+function render() {
+  $('coins').textContent = fmt(state.coins);
+  $('level').textContent = state.level >= LEVEL_CAP ? `Lv. ${LEVEL_CAP} (MAX)` : `Lv. ${state.level}/${LEVEL_CAP}`;
+
+  if (state.level >= LEVEL_CAP) {
+    $('xpbar-fill').style.width = '100%';
+    $('xpbar-max').textContent = 'Max level reached!';
+  } else {
+    const need = xpForLevel(state.level);
+    $('xpbar-fill').style.width = Math.min(100, (state.xp / need) * 100) + '%';
+    $('xpbar-max').textContent = `${state.xp}/${need} XP`;
+  }
+
+  if (currentTab === 'wardrobe') { renderWardrobe(); return; }
+  if (currentTab === 'shop') { renderShop(); return; }
+
+  checkQuestRefresh();
+
+  /* tool in hand */
+  const toolIcon = $('toolIcon'), toolText = $('toolText');
+  let toolHTML, label;
+  if (selection.type === 'tool') {
+    const spr = selection.value === 'hoe' ? 'hoe' : selection.value === 'watering' ? canSprite() : 'glove';
+    toolHTML = sprSVG(spr);
+    label = selection.value === 'hoe' ? 'Hoe' : selection.value === 'watering' ? (state.perks.goldenCan ? 'Golden Watering Can' : 'Watering Can') : 'Glove';
+  } else {
+    toolHTML = sprSVG(selection.value);
+    label = 'Seeds: ' + CROPS[selection.value].name;
+  }
+  setHTML(toolIcon, toolHTML);
+  toolText.textContent = label;
+  setHTML($('btnHoeIcon'), sprSVG('hoe'));
+  setHTML($('btnWaterIcon'), sprSVG(canSprite()));
+  setHTML($('btnGloveIcon'), sprSVG('glove'));
+  $('toolHoe').classList.toggle('active', selection.type === 'tool' && selection.value === 'hoe');
+  $('toolWater').classList.toggle('active', selection.type === 'tool' && selection.value === 'watering');
+  $('toolGlove').classList.toggle('active', selection.type === 'tool' && selection.value === 'glove');
+
+  $('pageLabel').textContent = `Page ${currentPage + 1}/${TOTAL_PAGES}`;
+  $('prevPage').disabled = currentPage === 0;
+  $('nextPage').disabled = currentPage === TOTAL_PAGES - 1;
+
+  renderField();
+
+  /* seeds */
+  let crops = '';
+  CROP_KEYS.forEach(key => {
+    const def = CROPS[key];
+    const active = selection.type === 'seed' && selection.value === key;
+    crops += `<div class="row"><span class="left">${ic(key, 34)}<span class="nm">${def.name}<small>Seed ${def.cost}${COIN()} / ${cropGrowTime(key)}s / Sells ${cropSellPrice(key)}${COIN()} / Lv.${state.cropLevels[key] || 1}</small></span></span>
+      <button class="btn ${active ? 'equipped' : ''}" data-a="crop" data-k="${key}" ${state.coins < def.cost ? 'disabled' : ''}>${active ? 'Selected' : 'Select'}</button></div>`;
+  });
+  setHTML($('crops'), crops);
+
+  /* quests */
+  $('quest-timer').textContent = `New quests in ${formatTime(state.questsRefreshAt - Date.now())}`;
+  const qhtml = (state.quests || []).map(q =>
+    `<div class="row quest-row${q.done ? ' done' : ''}"><span class="left">${ic(q.done ? 'check' : 'box', 18)}<span class="nm qt">${QUEST_TEXT[q.id] || q.text || q.id}<small>${Math.min(q.progress, q.target)}/${q.target}</small></span></span><span class="quest-reward">+${q.reward}${COIN()}</span></div>`).join('');
+  setHTML($('quest-list'), qhtml);
+
+  /* upgrades */
+  let upg = '';
+  CROP_KEYS.forEach(key => {
+    const lvl = state.cropLevels[key] || 1;
+    const cost = cropUpgradeCost(key);
+    upg += `<div class="row"><span class="left">${ic(key, 30)}<span class="nm">${CROPS[key].name}<span class="lvl-badge">Lv.${lvl}/${CROP_UPG_MAX}</span></span></span>
+      <button class="btn gold" data-a="upg" data-k="${key}" ${cost === null || state.coins < cost ? 'disabled' : ''}>${cost === null ? 'MAX' : cost + COIN()}</button></div>`;
+  });
+  const fCost = fertilityCost();
+  upg += `<div class="row"><span class="left">${ic('wheat', 30)}<span class="nm">Soil Fertility<span class="lvl-badge">Lv.${state.fertility}/${FERT_MAX}</span></span></span>
+    <button class="btn gold" data-a="fert" ${fCost === null || state.coins < fCost ? 'disabled' : ''}>${fCost === null ? 'MAX' : fCost + COIN()}</button></div>`;
+  setHTML($('upg-list'), upg);
+
+  renderBuildings();
+}
+
+/* ---- delegated clicks for the lists ---- */
+function onListClick(e) {
+  const b = e.target.closest('button[data-a]');
+  if (!b || b.disabled) return;
+  const a = b.dataset.a, k = b.dataset.k;
+  if (a === 'crop') selectCrop(k);
+  else if (a === 'upg') upgradeCrop(k);
+  else if (a === 'fert') upgradeFertility();
+  else if (a === 'ward') buyOrEquip(k);
+  else if (a === 'star') buyStarProduct(k);
+}
+['crops', 'upg-list', 'ward-list', 'stars-list'].forEach(id => $(id).addEventListener('click', onListClick));
+
+$('prevPage').onclick = () => { if (currentPage > 0) { currentPage--; sfxClick(); haptic('select'); render(); } };
+$('nextPage').onclick = () => { if (currentPage < TOTAL_PAGES - 1) { currentPage++; sfxClick(); haptic('select'); render(); } };
+
+setInterval(render, 1000);
+
+/* ================== BOOT ================== */
+(async function boot() {
+  await loadState();
+  try { if (tg) tg.ready(); } catch (e) {}
+  setTimeout(() => $('splash').classList.add('hidden'), 500);
+})();
+</script>
+</body>
+</html>
