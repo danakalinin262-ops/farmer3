@@ -935,10 +935,31 @@ function isOwned(pid) {
 }
 async function getInvoiceUrl(pid) {
   if (STARS_CONFIG.invoiceUrls && STARS_CONFIG.invoiceUrls[pid]) return STARS_CONFIG.invoiceUrls[pid];
+  const p = STAR_PRODUCTS[pid] || {};
+
+  // 1. Вызов через встроенный Telegram Serverless SDK
+  if (tg && tg.Serverless && typeof tg.Serverless.call === 'function') {
+    return new Promise((resolve, reject) => {
+      tg.Serverless.call(
+        'createinvoice',
+        { productId: pid, title: p.title || pid, stars: p.stars || 25 },
+        (err, res) => {
+          if (err) return reject(new Error(err.message || JSON.stringify(err)));
+          resolve(res && (res.invoiceUrl || res.invoice_link || res.url) || null);
+        }
+      );
+    });
+  }
+
+  // 2. Запасной вариант через fetch с заголовком Authorization: TMA
   if (STARS_CONFIG.createInvoiceEndpoint) {
     const r = await fetch(STARS_CONFIG.createInvoiceEndpoint, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productId: pid, initData: tg ? tg.initData : '' })
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'TMA ' + (tg ? tg.initData : '')
+      },
+      body: JSON.stringify({ productId: pid, title: p.title || pid, stars: p.stars || 25 })
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const j = await r.json();
