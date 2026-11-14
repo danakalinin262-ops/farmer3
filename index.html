@@ -970,6 +970,28 @@ function onInvoiceResult(pid, status) {
   else { toast('Payment failed. Please try again'); haptic('error'); }
   render();
 }
+  function getInvoiceUrl(pid) {
+  if (STARS_CONFIG.invoiceUrls && STARS_CONFIG.invoiceUrls[pid]) {
+    return Promise.resolve(STARS_CONFIG.invoiceUrls[pid]);
+  }
+  const p = STAR_PRODUCTS[pid] || {};
+  return new Promise((resolve, reject) => {
+    if (!tg || !tg.Serverless) {
+      return reject(new Error('Telegram Serverless SDK not available'));
+    }
+    tg.Serverless.call(
+      'createinvoice',
+      { productId: pid, title: p.title || pid, stars: p.stars || 25 },
+      (err, res) => {
+        if (err) return reject(err);
+        const url = res && (res.invoiceUrl || res.invoice_link || res.url);
+        if (!url) return reject(new Error('No invoiceUrl returned'));
+        resolve(url);
+      }
+    );
+  });
+}
+
 async function buyStarProduct(pid) {
   const p = STAR_PRODUCTS[pid];
   if (!p || purchaseBusy) return;
