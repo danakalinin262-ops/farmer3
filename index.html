@@ -345,12 +345,13 @@
    ===================================================================== */
 const STARS_CONFIG = {
   // >>> PUT YOUR BACKEND URL HERE (returns {"invoiceUrl": "..."}) <<<
-  createInvoiceEndpoint: '',
+  createInvoiceEndpoint: '/api/createinvoice',
   // Optional: ready-made invoice links per product, e.g. { coins_s: 'https://t.me/$xxxx' }
   invoiceUrls: {},
   // TESTING ONLY: grants purchases instantly without payment (use in a normal browser). NEVER ship with true!
   devFakePurchases: false
 };
+
 
 /* ================== TELEGRAM INIT ================== */
 const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
