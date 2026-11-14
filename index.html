@@ -1016,8 +1016,10 @@ async function buyStarProduct(pid) {
     });
     opened = true;
   } catch (e) {
-    console.error('Invoice error:', e);
-    toast('Could not start the payment. Try again later'); haptic('error');
+       console.error('Invoice error:', e);
+    toast('Err: ' + (e?.message || JSON.stringify(e) || String(e))); haptic('error');
+  }
+
   } finally {
     if (!opened) { purchaseBusy = false; render(); }
   }
