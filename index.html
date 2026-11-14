@@ -1022,56 +1022,6 @@ async function buyStarProduct(pid) {
   }
 }
 
-  const p = STAR_PRODUCTS[pid] || {};
-  return new Promise((resolve, reject) => {
-    if (!tg || !tg.Serverless) {
-      return reject(new Error('Telegram Serverless SDK not available'));
-    }
-    tg.Serverless.call(
-      'createinvoice',
-      { productId: pid, title: p.title || pid, stars: p.stars || 25 },
-      (err, res) => {
-        if (err) return reject(err);
-        const url = res && (res.invoiceUrl || res.invoice_link || res.url);
-        if (!url) return reject(new Error('No invoiceUrl returned'));
-        resolve(url);
-      }
-    );
-  });
-}
-
-async function buyStarProduct(pid) {
-  const p = STAR_PRODUCTS[pid];
-  if (!p || purchaseBusy) return;
-  ensureAudio();
-  if (isOwned(pid)) { toast('You already own this!'); return; }
-
-  if (STARS_CONFIG.devFakePurchases) { toast('TEST PURCHASE (no payment)'); grantProduct(pid); return; }
-
-  if (!inTelegram() || typeof tg.openInvoice !== 'function' || !tgAtLeast('6.1')) {
-    toast('Open the game inside Telegram to pay with Stars'); haptic('error'); return;
-  }
-  if (!paymentsConfigured()) { toast('Payments are not connected yet'); haptic('warning'); return; }
-
-  purchaseBusy = true; render();
-  let opened = false;
-  try {
-    const url = await getInvoiceUrl(pid);
-    if (!url) throw new Error('No invoice URL returned');
-    tg.openInvoice(url, status => {          // status: 'paid' | 'cancelled' | 'failed' | 'pending'
-      purchaseBusy = false;
-      onInvoiceResult(pid, status);
-    });
-    opened = true;
-  } catch (e) {
-       console.error('Invoice error:', e);
-    toast('Err: ' + (e?.message || JSON.stringify(e) || String(e))); haptic('error');
-  }
-
-  } finally {
-    if (!opened) { purchaseBusy = false; render(); }
-  }
-}
 
 /* ================== AVATAR ================== */
 function renderAvatar() {
