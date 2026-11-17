@@ -309,50 +309,23 @@
     </div>
   </div>
 </div>
-
 <script>
 /* =====================================================================
    FARM - Telegram Mini App
-   =====================================================================
-
-   TELEGRAM STARS (XTR) - HOW TO CONNECT PAYMENTS
    ---------------------------------------------------------------------
-   The game opens an invoice with Telegram.WebApp.openInvoice(url, cb).
-   The invoice link must be created by YOUR BACKEND with the Bot API,
-   because it needs your bot token. Minimal flow:
-
-   1) Backend endpoint, e.g.  POST https://your-server.example.com/api/create-invoice
-        body:    { "productId": "coins_s", "initData": "<Telegram.WebApp.initData>" }
-        - validate initData (HMAC-SHA256 with secret = HMAC_SHA256("WebAppData", BOT_TOKEN)),
-          see https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
-        - take the price from YOUR OWN catalog (never trust a price sent by the client!)
-        - call Bot API  createInvoiceLink:
-            { title, description, payload: "<userId>:<productId>:<nonce>",
-              provider_token: "",            // must be empty for Stars
-              currency: "XTR",
-              prices: [{ label: title, amount: <stars> }] }
-        - respond with   { "invoiceUrl": "https://t.me/$AbCdEf..." }
-
-   2) Bot side: answer every  pre_checkout_query  with answerPreCheckoutQuery(ok = true)
-      within 10 seconds, and store the purchase when  message.successful_payment  arrives
-      (that is the only reliable proof of payment; refunds: refundStarPayment).
-
-   3) Put the endpoint URL into STARS_CONFIG.createInvoiceEndpoint below. Done.
-      (Alternative: pre-create links and list them in STARS_CONFIG.invoiceUrls.)
-
-   The prices shown in this file (STAR_PRODUCTS) are for display only - keep them
-   identical to the prices on your server.
+   Telegram Stars: invoices are created by the Serverless endpoint
+   `createInvoice` (BotFather -> Serverless -> Endpoints). The mini app
+   calls it via Telegram.WebApp.Serverless.call - no bot token, no
+   external server needed.
    ===================================================================== */
 const STARS_CONFIG = {
-  // >>> PUT YOUR BACKEND URL HERE (returns {"invoiceUrl": "..."}) <<<
-    createInvoiceEndpoint: 'https://tgcloud.ai',
-
+  // Not needed with Serverless; kept for compatibility
+  createInvoiceEndpoint: '',
   // Optional: ready-made invoice links per product, e.g. { coins_s: 'https://t.me/$xxxx' }
   invoiceUrls: {},
   // TESTING ONLY: grants purchases instantly without payment (use in a normal browser). NEVER ship with true!
   devFakePurchases: false
 };
-
 
 /* ================== TELEGRAM INIT ================== */
 const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
@@ -923,9 +896,21 @@ function buyOrEquip(id) {
   saveState(); render();
 }
 
-/* ================== TELEGRAM STARS PAYMENTS ================== */
+/* ================== TELEGRAM STARS PAYMENTS (via Serverless) ================== */
+/* ---- Call a Serverless endpoint from the mini app ---- */
+function serverlessCall(name, data) {
+  return new Promise((resolve, reject) => {
+    if (!tg || !tg.Serverless || typeof tg.Serverless.call !== 'function')
+      return reject(new Error('Serverless is not available'));
+    tg.Serverless.call(name, data, (err, res) => err ? reject(err) : resolve(res));
+  });
+}
+
 function paymentsConfigured() {
-  return !!(STARS_CONFIG.createInvoiceEndpoint || (STARS_CONFIG.invoiceUrls && Object.keys(STARS_CONFIG.invoiceUrls).length));
+  return !!(
+    (STARS_CONFIG.invoiceUrls && Object.keys(STARS_CONFIG.invoiceUrls).length) ||
+    (tg && tg.Serverless && typeof tg.Serverless.call === 'function')
+  );
 }
 function isOwned(pid) {
   const p = STAR_PRODUCTS[pid];
@@ -935,26 +920,9 @@ function isOwned(pid) {
   return false;   // coin packs can be bought repeatedly
 }
 async function getInvoiceUrl(pid) {
-  if (STARS_CONFIG.invoiceUrls && STARS_CONFIG.invoiceUrls[pid]) return STARS_CONFIG.invoiceUrls[pid];
-  const p = STAR_PRODUCTS[pid] || {};
-  if (STARS_CONFIG.createInvoiceEndpoint) {
-    const r = await fetch(STARS_CONFIG.createInvoiceEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'TMA ' + window.btoa(tg ? tg.initData : '')
-      },
-      body: JSON.stringify({ productId: pid, title: p.title || pid, stars: p.stars || 25 })
-    });
-    const text = await r.text();
-    if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + text);
-    const j = JSON.parse(text);
-    const res = j.result || j;
-    return res.invoiceUrl || res.invoice_link || res.url || null;
-  }
-  return null;
+  const j = await serverlessCall('createInvoice', { productId: pid });
+  return (j && (j.invoiceUrl || j.invoice_url)) || null;
 }
-
 function grantProduct(pid) {
   const p = STAR_PRODUCTS[pid];
   if (!p) return;
@@ -1004,12 +972,11 @@ async function buyStarProduct(pid) {
     opened = true;
   } catch (e) {
     console.error('Invoice error:', e);
-    toast('Err: ' + (e?.message || JSON.stringify(e) || String(e))); haptic('error');
+    toast('Could not start the payment. Try again later'); haptic('error');
   } finally {
     if (!opened) { purchaseBusy = false; render(); }
   }
 }
-
 
 /* ================== AVATAR ================== */
 function renderAvatar() {
@@ -1059,7 +1026,7 @@ function renderShop() {
   if ($('stars-list')._sig === sig) return;
   $('stars-list')._sig = sig;
   setHTML($('stars-setup'), (!configured && !STARS_CONFIG.devFakePurchases)
-    ? `<div class="setup"><b>Stars payments are not connected yet.</b><br>Developer: set <b>STARS_CONFIG.createInvoiceEndpoint</b> in the game script (instructions are in the comment at the top of the script).</div>`
+    ? `<div class="setup"><b>Stars payments are not connected yet.</b><br>Developer: create the Serverless endpoint <b>createInvoice</b> in BotFather (see the game script comment).</div>`
     : '');
   let html = '';
   Object.entries(STAR_GROUPS).forEach(([g, label]) => {
